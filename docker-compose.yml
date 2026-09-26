@@ -1,0 +1,248 @@
+# ==============================================================================
+# PlaylistLabs User Management - Public Community Stack (Docker Compose)
+#
+# Architecture:
+#   - Open Source: Dashboard UI & Management API (compiled from local source)
+#   - Closed Source: Xtream Codes Engine, Stream Redirector, Syncer Worker
+#     (pulled as pre-compiled, hardened container images from GitHub Packages)
+#
+# Quick Start:
+#   1. Copy .env.example to .env and configure your variables
+#   2. Place passwords in secrets/ or allow auto-generation
+#   3. Run: docker compose up -d
+# ==============================================================================
+
+x-logging: &default-logging
+  driver: "json-file"
+  options:
+    max-size: "20m"
+    max-file: "5"
+
+services:
+  # ----------------------------------------------------------------------------
+  # 1. MariaDB Database (Primary Persistence)
+  # ----------------------------------------------------------------------------
+  mariadb:
+    image: mariadb:11.4
+    container_name: playlistlabs-mariadb
+    restart: unless-stopped
+    logging: *default-logging
+    environment:
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-playlistlabs}
+      MARIADB_USER: ${MARIADB_USER:-playlistlabs}
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
+      MARIADB_ROOT_PASSWORD_FILE: /run/secrets/db_root_password
+    secrets:
+      - db_password
+      - db_root_password
+    volumes:
+      - mariadb_data:/var/lib/mysql
+      - ./sql/001_init_schema.sql:/docker-entrypoint-initdb.d/001_init_schema.sql:ro
+    healthcheck:
+      test: ["CMD-SHELL", "mariadb-admin ping -h 127.0.0.1 -u root -p$$(cat /run/secrets/db_root_password)"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+      start_period: 10s
+
+  # ----------------------------------------------------------------------------
+  # 2. Redis Cache & Anti-Brute-Force Rate Limiter
+  # ----------------------------------------------------------------------------
+  redis:
+    image: redis:7-alpine
+    container_name: playlistlabs-redis
+    restart: unless-stopped
+    logging: *default-logging
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 5s
+      timeout: 3s
+      retries: 5
+
+  # ----------------------------------------------------------------------------
+  # 3. Open Source Management Dashboard (Web UI + Administration API)
+  # ----------------------------------------------------------------------------
+  dashboard:
+    image: ghcr.io/lkinderbueno/user-management-dashboard:${APP_VERSION:-latest}
+    pull_policy: always
+    container_name: playlistlabs-dashboard
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      MARIADB_HOST: mariadb
+      MARIADB_PORT: 3306
+      MARIADB_USER: ${MARIADB_USER:-playlistlabs}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-playlistlabs}
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
+      JWT_SECRET_FILE: /run/secrets/jwt_secret
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: 8080
+      DASHBOARD_PORT: 8080
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      SYNCER_URL: http://syncer:8090
+      EPG_CACHE_DIR: /data/epg
+      PLAYLISTLABS_API_URL: ${PLAYLISTLABS_API_URL:-}
+      PLAYLISTLABS_API_TOKEN: ${PLAYLISTLABS_API_TOKEN:-}
+      PLAYLISTLABS_API_PASSWORD: ${PLAYLISTLABS_API_PASSWORD:-}
+      IPTVEDITOR_API_URL: ${IPTVEDITOR_API_URL:-}
+      IPTVEDITOR_API_TOKEN: ${IPTVEDITOR_API_TOKEN:-}
+      IPTVEDITOR_API_PASSWORD: ${IPTVEDITOR_API_PASSWORD:-}
+    secrets:
+      - db_password
+      - jwt_secret
+    volumes:
+      - ./data/epg:/data/epg
+      - ./backups:/app/backups
+
+  # ----------------------------------------------------------------------------
+  # 4. Closed Source: Xtream Codes Player & Panel API Engine
+  # ----------------------------------------------------------------------------
+  xtream:
+    image: ghcr.io/lkinderbueno/user-management-xtream:${APP_VERSION:-latest}
+    pull_policy: always
+    container_name: playlistlabs-xtream
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      MARIADB_HOST: mariadb
+      MARIADB_PORT: 3306
+      MARIADB_USER: ${MARIADB_USER:-playlistlabs}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-playlistlabs}
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: 8000
+      XTREAM_PORT: 8000
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      EPG_CACHE_DIR: /data/epg
+    secrets:
+      - db_password
+    volumes:
+      - ./data/epg:/data/epg
+
+  # ----------------------------------------------------------------------------
+  # 5. Closed Source: High-Performance Stream Redirector / Router
+  # ----------------------------------------------------------------------------
+  redirector:
+    image: ghcr.io/lkinderbueno/user-management-redirector:${APP_VERSION:-latest}
+    pull_policy: always
+    container_name: playlistlabs-redirector
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      mariadb:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    environment:
+      MARIADB_HOST: mariadb
+      MARIADB_PORT: 3306
+      MARIADB_USER: ${MARIADB_USER:-playlistlabs}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-playlistlabs}
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
+      REDIS_HOST: redis
+      REDIS_PORT: 6379
+      PORT: 3100
+      REDIRECT_PORT: 3100
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+    secrets:
+      - db_password
+
+  # ----------------------------------------------------------------------------
+  # 6. Closed Source: Background Playlist & EPG Syncer Engine
+  # ----------------------------------------------------------------------------
+  syncer:
+    image: ghcr.io/lkinderbueno/user-management-syncer:${APP_VERSION:-latest}
+    pull_policy: always
+    container_name: playlistlabs-syncer
+    restart: unless-stopped
+    logging: *default-logging
+    security_opt:
+      - no-new-privileges:true
+    cap_drop:
+      - ALL
+    depends_on:
+      mariadb:
+        condition: service_healthy
+    environment:
+      MARIADB_HOST: mariadb
+      MARIADB_PORT: 3306
+      MARIADB_USER: ${MARIADB_USER:-playlistlabs}
+      MARIADB_DATABASE: ${MARIADB_DATABASE:-playlistlabs}
+      MARIADB_PASSWORD_FILE: /run/secrets/db_password
+      SYNCER_PORT: 8090
+      SYNC_INTERVAL: ${SYNC_INTERVAL:-12h}
+      LOG_LEVEL: ${LOG_LEVEL:-info}
+      EPG_CACHE_DIR: /data/epg
+      PLAYLISTLABS_API_URL: ${PLAYLISTLABS_API_URL:-}
+      PLAYLISTLABS_API_TOKEN: ${PLAYLISTLABS_API_TOKEN:-}
+      PLAYLISTLABS_API_PASSWORD: ${PLAYLISTLABS_API_PASSWORD:-}
+      IPTVEDITOR_API_URL: ${IPTVEDITOR_API_URL:-}
+      IPTVEDITOR_API_TOKEN: ${IPTVEDITOR_API_TOKEN:-}
+      IPTVEDITOR_API_PASSWORD: ${IPTVEDITOR_API_PASSWORD:-}
+    secrets:
+      - db_password
+    volumes:
+      - ./data/epg:/data/epg
+
+  # ----------------------------------------------------------------------------
+  # 7. Unified Ingress Gateway & Reverse Proxy (Caddy: Automatic SSL & Routing)
+  # ----------------------------------------------------------------------------
+  caddy:
+    image: caddy:2-alpine
+    container_name: playlistlabs-caddy
+    restart: unless-stopped
+    logging: *default-logging
+    ports:
+      - "${HTTP_PORT:-80}:80"
+      - "${HTTPS_PORT:-443}:443"
+    environment:
+      DOMAIN: ${DOMAIN:-localhost}
+      DASHBOARD_UPSTREAM: dashboard:8080
+      XTREAM_UPSTREAM: xtream:8000
+      REDIRECTOR_UPSTREAM: redirector:3100
+      ASK_DOMAIN_ENDPOINT: http://dashboard:8080/api/caddy/check-domain
+    volumes:
+      - ./deploy/caddy:/etc/caddy:ro
+      - caddy_data:/data
+      - caddy_config:/config
+    depends_on:
+      - dashboard
+      - xtream
+      - redirector
+
+secrets:
+  db_password:
+    file: ./secrets/db_password.txt
+  db_root_password:
+    file: ./secrets/db_root_password.txt
+  jwt_secret:
+    file: ./secrets/jwt_secret.txt
+
+volumes:
+  mariadb_data:
+  caddy_data:
+  caddy_config:

@@ -1,0 +1,153 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  html {
+    scrollbar-gutter: stable;
+  }
+
+  body {
+    @apply bg-[#f8f9fe] text-[#525f7f] font-sans antialiased transition-colors duration-200;
+    -webkit-font-smoothing: antialiased;
+    -moz-osx-font-smoothing: grayscale;
+  }
+
+  .dark body {
+    @apply bg-[#0f172a] text-[#dee2e6];
+  }
+
+  h1, h2, h3, h4, h5, h6 {
+    @apply text-[#32325d] font-semibold transition-colors duration-200;
+  }
+
+  .dark h1,
+  .dark h2,
+  .dark h3,
+  .dark h4,
+  .dark h5,
+  .dark h6 {
+    @apply text-white;
+  }
+
+  ::selection {
+    @apply bg-[#3970e1] text-white;
+  }
+}
+
+/* Prevent Tailwind space-y-* / space-x-* sibling selectors from displacing full-screen fixed overlays/modals */
+.fixed.inset-0,
+[class*="fixed"][class*="inset-0"] {
+  margin: 0 !important;
+}
+
+/* PlaylistLabs style scrollbars */
+* {
+  scrollbar-color: #cbd5e1 transparent;
+  scrollbar-width: thin;
+}
+
+.dark * {
+  scrollbar-color: #334155 transparent;
+}
+
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #cbd5e1;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #94a3b8;
+}
+
+.dark ::-webkit-scrollbar-thumb {
+  background: #334155;
+}
+.dark ::-webkit-scrollbar-thumb:hover {
+  background: #475569;
+}
+
+/* Fix dark mode native date/time picker calendar icon */
+.dark input[type="date"]::-webkit-calendar-picker-indicator,
+.dark input[type="datetime-local"]::-webkit-calendar-picker-indicator,
+.dark input[type="time"]::-webkit-calendar-picker-indicator {
+  filter: invert(0.8) brightness(1.2);
+  cursor: pointer;
+}
+
+/* Dark mode modal & popover surfaces */
+.dark .shadow-argon-dropdown {
+  box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.6), 0 8px 10px -6px rgba(0, 0, 0, 0.6);
+}
+
+.dark .shadow-argon-dropdown.bg-white,
+.dark div[class*="shadow-argon-dropdown"].bg-white {
+  background-color: #0f172a;
+  border-color: #1e293b;
+  color: #cbd5e1;
+}
+
+.dark .shadow-argon-dropdown .border-b,
+.dark .shadow-argon-dropdown .border-t {
+  border-color: #1e293b;
+}
+
+.dark .shadow-argon-dropdown input:not([type="checkbox"]):not([type="radio"]),
+.dark .shadow-argon-dropdown select,
+.dark .shadow-argon-dropdown textarea {
+  background-color: #1e293b;
+  border-color: #334155;
+  color: #f8fafc;
+}
+
+.dark .shadow-argon-dropdown button.bg-white {
+  background-color: #1e293b;
+  color: #e2e8f0;
+  border-color: #334155;
+}
+
+.dark .shadow-argon-dropdown button.bg-white:hover {
+  background-color: #334155;
+  color: #ffffff;
+}
+
+/* Argon card and button utility styles */
+@layer components {
+  .ie-card {
+    @apply bg-white rounded-lg border border-[#e9ecef] shadow-argon dark:bg-slate-800/95 dark:border-slate-700/80;
+  }
+
+  .ie-input {
+    @apply bg-white border border-[#dee2e6] rounded text-[13px] text-[#32325d] placeholder-[#adb5bd] px-3 py-1.5 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 transition shadow-argon-sm dark:bg-slate-800 dark:border-slate-700 dark:text-slate-100 dark:placeholder-slate-500;
+  }
+
+  .ie-btn {
+    @apply inline-flex items-center justify-center font-semibold text-[13px] px-3 py-1.5 rounded transition shadow-argon-btn hover:-translate-y-[1px] hover:shadow-argon-btn-hover active:translate-y-0 disabled:opacity-50 disabled:cursor-not-allowed disabled:transform-none disabled:shadow-none;
+  }
+
+  .ie-btn-primary {
+    @apply ie-btn bg-[#3970e1] hover:bg-[#2c5ec2] text-white;
+  }
+
+  .ie-btn-success {
+    @apply ie-btn bg-[#2dce89] hover:bg-[#26af74] text-white;
+  }
+
+  .ie-btn-danger {
+    @apply ie-btn bg-[#f5365c] hover:bg-[#ec0c38] text-white;
+  }
+
+  .ie-btn-outline {
+    @apply ie-btn bg-white hover:bg-[#f4f5f7] text-[#525f7f] border border-[#dee2e6] shadow-none hover:border-[#cad1d7] dark:bg-slate-800 dark:hover:bg-slate-700 dark:text-slate-300 dark:border-slate-700 dark:hover:text-white;
+  }
+
+  .ie-btn-pill {
+    @apply rounded-full;
+  }
+}

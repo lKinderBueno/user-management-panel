@@ -1,0 +1,2117 @@
+openapi: 3.0.3
+info:
+  title: PlaylistLabs User Management API
+  description: |
+    REST API for PlaylistLabs User Management open-source panel.
+    Allows third-party systems, and automation tools to manage **Playlists & Sync**, **Managed Users**, **Team Members / Collaborators**, and **API Tokens**.
+
+    ### Authentication
+    Authentication is performed strictly using an internal API Token (`plt_live_...`) in the canonical **`X-API-Token`** header:
+    - Header: `X-API-Token: <your_token>`
+
+    ### Optional Token Password
+    If the API Token was configured with an optional password, include it in the **`X-Token-Password`** header:
+    - Header: `X-Token-Password: <your_password>`
+
+    ### Anti-Brute-Force & IP Banning
+    Invalid tokens or repeated incorrect token passwords trigger automatic IP rate tracking.
+    Exceeding the maximum allowed failed attempts within the security window causes an **immediate IP ban** (`403 Forbidden`). Once banned, subsequent requests from the IP are rejected with no further logging.
+  version: 1.0.0
+servers:
+  - url: /api
+    description: Current server base API path
+
+security:
+  - ApiTokenAuth: []
+  - ApiTokenAuth: []
+    TokenPasswordAuth: []
+
+paths:
+  /playlists:
+    get:
+      summary: List accessible playlists
+      description: Returns all playlists accessible to the caller. Automatically scoped according to API token playlist restrictions (`allowed_playlist_ids`) and collaborator assignments.
+      operationId: getPlaylists
+      tags:
+        - Playlists
+      responses:
+        "200":
+          description: List of accessible playlists
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/Playlist"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /playlists/{listId}/refresh:
+    post:
+      summary: Refresh playlist from PlaylistLabs
+      description: |
+        Triggers an asynchronous background synchronization job with PlaylistLabs for the specified playlist.
+        Fetches updated channels, VODs, series, and categories from PlaylistLabs and reconciles them in MariaDB.
+        Subject to token playlist scope checks (`allowed_playlist_ids`).
+      operationId: refreshPlaylist
+      tags:
+        - Playlists
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+        - name: force
+          in: query
+          required: false
+          description: "Whether to force a full re-sync of all streams and categories (default: false)"
+          schema:
+            type: boolean
+            default: false
+            example: false
+      requestBody:
+        required: false
+        description: Optional JSON body specifying sync options
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRequest"
+      responses:
+        "202":
+          description: Synchronization job accepted and started in background
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartSyncResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Another synchronization job is already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncConflictResponse"
+        "503":
+          description: Synchronization engine is not available on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /playlists/{listId}/sync:
+    post:
+      summary: Synchronize playlist with PlaylistLabs (alias)
+      description: Identical alias to `POST /playlists/{listId}/refresh`.
+      operationId: syncPlaylist
+      tags:
+        - Playlists
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+        - name: force
+          in: query
+          required: false
+          description: "Whether to force a full re-sync of all streams and categories (default: false)"
+          schema:
+            type: boolean
+            default: false
+            example: false
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRequest"
+      responses:
+        "202":
+          description: Synchronization job accepted and started in background
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartSyncResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Another synchronization job is already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncConflictResponse"
+        "503":
+          description: Synchronization engine is not available on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /playlists/sync/status:
+    get:
+      summary: Get sync engine status
+      description: Returns the current execution status of the background synchronization engine, including the active job ID, current step, and running status.
+      operationId: getSyncStatus
+      tags:
+        - Playlists
+      responses:
+        "200":
+          description: Current status of the sync engine
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncStatus"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /playlists/{listId}/import-from-editor:
+    post:
+      summary: Import users and welcome info from PlaylistLabs
+      description: Directly imports customer accounts (managed users) and welcome information configured on PlaylistLabs for this playlist.
+      operationId: importFromEditor
+      tags:
+        - Playlists
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ImportFromEditorRequest"
+      responses:
+        "200":
+          description: Import completed successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ImportFromEditorResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "500":
+          description: Failed connecting to PlaylistLabs or database error
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /playlists/sync:
+    post:
+      summary: Synchronize all playlists with PlaylistLabs
+      description: |
+        Triggers an asynchronous background synchronization job across all playlists accessible to the caller.
+      operationId: syncAllPlaylists
+      tags:
+        - Playlists
+      parameters:
+        - name: force
+          in: query
+          required: false
+          description: "Whether to force a full re-sync of all streams and categories (default: false)"
+          schema:
+            type: boolean
+            default: false
+            example: false
+      requestBody:
+        required: false
+        description: Optional JSON body specifying sync options
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRequest"
+      responses:
+        "202":
+          description: Synchronization job accepted and started in background
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartSyncResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Another synchronization job is already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncConflictResponse"
+        "503":
+          description: Synchronization engine is not available on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /playlists/refresh:
+    post:
+      summary: Refresh all playlists from PlaylistLabs (alias)
+      description: Identical alias to `POST /playlists/sync`.
+      operationId: refreshAllPlaylists
+      tags:
+        - Playlists
+      parameters:
+        - name: force
+          in: query
+          required: false
+          description: "Whether to force a full re-sync of all streams and categories (default: false)"
+          schema:
+            type: boolean
+            default: false
+            example: false
+      requestBody:
+        required: false
+        description: Optional JSON body specifying sync options
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/SyncRequest"
+      responses:
+        "202":
+          description: Synchronization job accepted and started in background
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/StartSyncResponse"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "409":
+          description: Another synchronization job is already running
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/SyncConflictResponse"
+        "503":
+          description: Synchronization engine is not available on this server
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ErrorResponse"
+
+  /playlists/{listId}/settings:
+    put:
+      summary: Update playlist settings
+      description: Updates connection limits, activity tracking, CNAME, and SSL settings for the playlist.
+      operationId: updatePlaylistSettings
+      tags:
+        - Playlists
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdatePlaylistSettingsRequest"
+      responses:
+        "200":
+          description: Playlist settings updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Playlist settings updated successfully"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /playlists/{listId}/welcome-info:
+    put:
+      summary: Update welcome channel and info
+      description: Configures the custom welcome channel and on-screen message slides for users on this playlist.
+      operationId: updateWelcomeInfo
+      tags:
+        - Playlists
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateWelcomeInfoRequest"
+      responses:
+        "200":
+          description: Welcome info updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /playlists/{listId}/portal-branding:
+    put:
+      summary: Update client portal branding
+      description: Configures branding, logo, colors, and custom HTML for the user self-service portal on this playlist.
+      operationId: updatePortalBranding
+      tags:
+        - Playlists
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/PlaylistPortalBranding"
+      responses:
+        "200":
+          description: Portal branding updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: "Portal branding updated successfully"
+                  portal_branding:
+                    $ref: "#/components/schemas/PlaylistPortalBranding"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /playlists/{listId}/users:
+    get:
+      summary: List managed users for a playlist
+      description: Returns all managed users belonging to the specified playlist. Output is automatically scoped according to the caller's collaborator permissions.
+      operationId: getManagedUsers
+      tags:
+        - Managed Users
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+      responses:
+        "200":
+          description: List of managed users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/ManagedUser"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    post:
+      summary: Create a managed user
+      description: Creates a new managed user on the given playlist.
+      operationId: createManagedUser
+      tags:
+        - Managed Users
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateManagedUserRequest"
+      responses:
+        "201":
+          description: User created successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagedUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    delete:
+      summary: Delete managed users in bulk
+      description: Permanently deletes one or more managed users from the playlist.
+      operationId: deleteManagedUsers
+      tags:
+        - Managed Users
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - ids
+              properties:
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                  description: Array of managed user IDs to delete
+                  example: [101, 102]
+      responses:
+        "200":
+          description: Users deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  deleted_count:
+                    type: integer
+                    example: 2
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /playlists/{listId}/users/{id}:
+    put:
+      summary: Update a managed user
+      description: Updates settings, allowed categories, stream patterns, and expiration for an existing managed user.
+      operationId: updateManagedUser
+      tags:
+        - Managed Users
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+        - name: id
+          in: path
+          required: true
+          description: Managed User ID
+          schema:
+            type: integer
+            example: 101
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateManagedUserRequest"
+      responses:
+        "200":
+          description: User updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/ManagedUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+  /playlists/{listId}/users/{id}/credentials:
+    post:
+      summary: Update user username or password
+      description: Safely changes the credentials for an active managed user.
+      operationId: updateUserCredentials
+      tags:
+        - Managed Users
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CredentialsRequest"
+      responses:
+        "200":
+          description: Credentials updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: "#/components/schemas/ManagedUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+
+  /playlists/{listId}/users/move:
+    post:
+      summary: Move users to another playlist
+      description: Transfers selected managed users from the source playlist to a target playlist with optional provider pattern remapping.
+      operationId: moveUsers
+      tags:
+        - Managed Users
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - new_list_id
+                - ids
+              properties:
+                new_list_id:
+                  type: string
+                  description: Destination Playlist ID
+                  example: "1002"
+                ids:
+                  type: array
+                  items:
+                    type: integer
+                  example: [101, 102]
+                pattern_mappings:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      source_url:
+                        type: string
+                      target_url:
+                        type: string
+                      action:
+                        type: string
+                        enum: [map, discard]
+      responses:
+        "200":
+          description: Users moved successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  moved_count:
+                    type: integer
+                    example: 2
+
+  /playlists/{listId}/users/bulk-categories:
+    post:
+      summary: Bulk update category assignments for users
+      description: Updates assigned live TV, VOD, and series categories for multiple managed users within the playlist simultaneously.
+      operationId: bulkUpdateCategories
+      tags:
+        - Managed Users
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkCategoriesRequest"
+      responses:
+        "200":
+          description: Categories updated successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /playlists/{listId}/users/bulk-patterns:
+    post:
+      summary: Bulk update provider patterns for users
+      description: Batch updates, renames, adds, or removes upstream provider patterns across managed users.
+      operationId: bulkUpdatePatterns
+      tags:
+        - Managed Users
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/BulkPatternRequest"
+      responses:
+        "200":
+          description: Bulk pattern modifications applied successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  affected_users:
+                    type: integer
+                    example: 42
+                  modified_patterns:
+                    type: integer
+                    example: 42
+                  message:
+                    type: string
+                    example: "Successfully updated patterns"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /playlists/{listId}/users/{id}/force-sync:
+    post:
+      summary: Force sync managed user with upstream Xtream provider
+      description: Immediately queries upstream provider to update expiry, max connections, and account status.
+      operationId: forceSyncUser
+      tags:
+        - Managed Users
+      parameters:
+        - name: listId
+          in: path
+          required: true
+          description: Playlist ID (64-bit integer)
+          schema:
+            type: integer
+            format: int64
+            example: 1001
+        - name: id
+          in: path
+          required: true
+          description: Managed User ID
+          schema:
+            type: integer
+            example: 101
+      requestBody:
+        required: false
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/ForceSyncRequest"
+      responses:
+        "200":
+          description: User synchronized successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  user:
+                    $ref: "#/components/schemas/ManagedUser"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /team:
+    get:
+      summary: List team members
+      description: Retrieves the team hierarchy (administrators and collaborators). Scoped to the caller's allowed management branch.
+      operationId: getTeamMembers
+      tags:
+        - Team Management
+      responses:
+        "200":
+          description: Team members list
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/TeamMember"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      summary: Create a team member (Admin or Collaborator)
+      description: Adds a new staff member. Requires team creation permissions (`can_create_admins` or `can_create_collaborators`).
+      operationId: createTeamMember
+      tags:
+        - Team Management
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTeamMemberRequest"
+      responses:
+        "201":
+          description: Team member created
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /team/{id}:
+    get:
+      summary: Get team member details
+      description: Retrieves details of a specific team member.
+      operationId: getTeamMember
+      tags:
+        - Team Management
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            example: 2
+      responses:
+        "200":
+          description: Team member details
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    put:
+      summary: Update a team member
+      description: Updates roles, playlist permissions, and access privileges. Revoking `can_manage_api_tokens` automatically cascades down to all subordinate collaborators.
+      operationId: updateTeamMember
+      tags:
+        - Team Management
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            example: 2
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTeamMemberRequest"
+      responses:
+        "200":
+          description: Team member updated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/TeamMember"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      summary: Delete a team member
+      description: Deletes a collaborator or administrator account. Protected against self-deletion and last-admin deletion.
+      operationId: deleteTeamMember
+      tags:
+        - Team Management
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            example: 2
+      responses:
+        "200":
+          description: Member deleted successfully
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: Team member deleted successfully
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /tokens:
+    get:
+      summary: List API tokens
+      description: Lists active and inactive API tokens created by the authenticated user.
+      operationId: getTokens
+      tags:
+        - API Tokens
+      responses:
+        "200":
+          description: List of API tokens
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: "#/components/schemas/APIToken"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+    post:
+      summary: Create an API token
+      description: Generates a new API token (`plt_live_...`). Plaintext secret is returned only once upon creation.
+      operationId: createToken
+      tags:
+        - API Tokens
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/CreateTokenRequest"
+      responses:
+        "201":
+          description: API token generated
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIToken"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /tokens/{id}:
+    put:
+      summary: Update an API token
+      description: Updates configuration parameters of an existing API token, such as its name, allowed IP addresses, restricted playlist IDs, or optional password.
+      operationId: updateToken
+      tags:
+        - API Tokens
+      parameters:
+        - name: id
+          in: path
+          required: true
+          description: API token ID
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: "#/components/schemas/UpdateTokenRequest"
+      responses:
+        "200":
+          description: API token updated successfully
+          content:
+            application/json:
+              schema:
+                $ref: "#/components/schemas/APIToken"
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+        "404":
+          $ref: "#/components/responses/NotFound"
+
+    delete:
+      summary: Revoke an API token
+      description: Permanently deletes and invalidates an API token.
+      operationId: deleteToken
+      tags:
+        - API Tokens
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      responses:
+        "200":
+          description: Token revoked
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  message:
+                    type: string
+                    example: API token revoked successfully
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+  /tokens/{id}/toggle:
+    put:
+      summary: Toggle API token active status
+      description: Enables or disables an API token without deleting it.
+      operationId: toggleToken
+      tags:
+        - API Tokens
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: integer
+            format: int64
+            example: 1
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - is_active
+              properties:
+                is_active:
+                  type: boolean
+                  example: false
+      responses:
+        "200":
+          description: Status updated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  success:
+                    type: boolean
+                    example: true
+                  is_active:
+                    type: boolean
+                    example: false
+        "400":
+          $ref: "#/components/responses/BadRequest"
+        "401":
+          $ref: "#/components/responses/Unauthorized"
+        "403":
+          $ref: "#/components/responses/Forbidden"
+
+components:
+  securitySchemes:
+    ApiTokenAuth:
+      type: apiKey
+      in: header
+      name: X-API-Token
+      description: "PlaylistLabs internal API Token (format: plt_live_...)"
+    TokenPasswordAuth:
+      type: apiKey
+      in: header
+      name: X-Token-Password
+      description: "Optional password configured during API token generation (leave empty if no password was set)"
+
+  schemas:
+    Playlist:
+      type: object
+      properties:
+        id:
+          type: string
+          description: 64-bit Playlist ID represented as string to avoid JavaScript precision loss
+          example: "1001"
+        name:
+          type: string
+          example: "Main Sports & Movies"
+        message:
+          type: string
+          nullable: true
+          example: "Welcome to PlaylistLabs"
+        language:
+          type: string
+          nullable: true
+          example: "en"
+        active_channels:
+          type: integer
+          example: 540
+        active_movies:
+          type: integer
+          example: 1200
+        active_series:
+          type: integer
+          example: 320
+        managed_users_count:
+          type: integer
+          example: 45
+        synced_at:
+          type: string
+          format: date-time
+          nullable: true
+        last_updated_channel:
+          type: string
+          format: date-time
+          nullable: true
+        last_updated_movie:
+          type: string
+          format: date-time
+          nullable: true
+        last_updated_series:
+          type: string
+          format: date-time
+          nullable: true
+        is_orphaned:
+          type: boolean
+          example: false
+        allow_tracking:
+          type: boolean
+          example: true
+        limit_max_connections:
+          type: boolean
+          example: true
+        max_connections:
+          type: integer
+          example: 1
+        tracking_timeout_minutes:
+          type: integer
+          example: 10
+        cname:
+          type: string
+          example: "iptv.domain.com"
+        enforce_cname:
+          type: boolean
+          example: false
+        cname_ssl:
+          type: boolean
+          example: false
+
+    UpdatePlaylistSettingsRequest:
+      type: object
+      properties:
+        allow_tracking:
+          type: boolean
+          description: "Enable connection tracking and analytics for this playlist"
+          example: true
+        limit_max_connections:
+          type: boolean
+          description: "Enforce concurrent connection limits"
+          example: true
+        max_connections:
+          type: integer
+          description: "Default maximum concurrent connections allowed per user"
+          example: 1
+        tracking_timeout_minutes:
+          type: integer
+          description: "Connection idle timeout in minutes before considering a stream closed"
+          example: 10
+        cname:
+          type: string
+          description: "Custom domain/hostname (CNAME) for playlist streaming endpoints"
+          example: "iptv.domain.com"
+        enforce_cname:
+          type: boolean
+          description: "Restrict playback to the configured CNAME only"
+          example: false
+        cname_ssl:
+          type: boolean
+          description: "Enable automatic SSL certificate issuance for the custom CNAME via Caddy"
+          example: false
+
+    UpdateWelcomeInfoRequest:
+      type: object
+      properties:
+        category:
+          type: string
+          description: "Category title under which the welcome stream is placed"
+          example: "Welcome & Announcements"
+        tags:
+          type: array
+          items:
+            type: string
+          description: "Text lines displayed on the welcome slide/message (max 10)"
+          example: ["Welcome to our service!", "Contact support on Telegram @help"]
+        stream:
+          type: string
+          description: "Direct video stream URL or video file URL for welcome channel"
+          example: "http://example.com/welcome.mp4"
+        image:
+          type: string
+          description: "Custom logo/poster image URL for the welcome channel"
+          example: "http://example.com/poster.png"
+        where:
+          type: object
+          properties:
+            channels:
+              type: boolean
+              example: true
+            vods:
+              type: boolean
+              example: false
+            series:
+              type: boolean
+              example: false
+        disableAll:
+          type: boolean
+          description: "Disable welcome channel completely"
+          example: false
+
+    PlaylistPortalBranding:
+      type: object
+      properties:
+        enabled:
+          type: boolean
+          description: "Enable custom portal branding for this playlist"
+          example: true
+        title:
+          type: string
+          description: "Custom portal header title"
+          example: "Premium TV Portal"
+        logo:
+          type: string
+          description: "URL or base64 data for custom portal logo"
+          example: "http://example.com/logo.png"
+        html:
+          type: string
+          description: "Custom HTML content displayed on user dashboard"
+          example: "<p>Support 24/7 via Telegram</p>"
+        primary_color:
+          type: string
+          description: "Primary theme hex color"
+          example: "#3b82f6"
+        secondary_color:
+          type: string
+          description: "Secondary theme hex color"
+          example: "#6366f1"
+        accent_color:
+          type: string
+          description: "Accent theme hex color"
+          example: "#10b981"
+        background_theme:
+          type: string
+          description: "Background theme preset"
+          example: "slate"
+
+    SyncRequest:
+      type: object
+      properties:
+        force:
+          type: boolean
+          description: "Force complete re-sync of all streams and categories"
+          default: true
+          example: true
+
+    SyncStatus:
+      type: object
+      properties:
+        is_running:
+          type: boolean
+          example: false
+        job_id:
+          type: string
+          example: "sync_1710543210000000000"
+        playlist_id:
+          type: integer
+          format: int64
+          example: 1001
+        playlist_name:
+          type: string
+          example: "Main Sports & Movies"
+        status:
+          type: string
+          enum: [idle, running, completed, failed, disabled]
+          example: "completed"
+        step:
+          type: string
+          example: "Sync completed successfully"
+        started_at:
+          type: string
+          format: date-time
+          nullable: true
+        finished_at:
+          type: string
+          format: date-time
+          nullable: true
+        error:
+          type: string
+          example: ""
+
+    StartSyncResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        job_id:
+          type: string
+          example: "sync_1710543210000000000"
+        playlist_id:
+          type: integer
+          format: int64
+          example: 1001
+        message:
+          type: string
+          example: "Playlist synchronization started in background"
+        status:
+          $ref: "#/components/schemas/SyncStatus"
+
+    SyncConflictResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "sync_in_progress"
+        message:
+          type: string
+          example: "a synchronization job (sync_1710543210000000000) is already running"
+        status:
+          $ref: "#/components/schemas/SyncStatus"
+
+    ImportFromEditorRequest:
+      type: object
+      properties:
+        playlist_id:
+          type: integer
+          format: int64
+          description: "Target playlist ID (optional when called on /playlists/{listId}/import-from-editor)"
+          example: 1001
+        mode:
+          type: string
+          enum: [skip, overwrite]
+          default: skip
+          description: "Import mode: 'skip' preserves existing users, 'overwrite' replaces existing users with PlaylistLabs data"
+          example: "skip"
+        import_welcome_info:
+          type: boolean
+          default: true
+          description: "Whether to import welcome info and portal settings from PlaylistLabs"
+          example: true
+
+    ImportFromEditorResponse:
+      type: object
+      properties:
+        success:
+          type: boolean
+          example: true
+        message:
+          type: string
+          example: "Import completed successfully"
+        imported_users_count:
+          type: integer
+          example: 25
+        welcome_info_imported:
+          type: boolean
+          example: true
+
+    ManagedUser:
+      type: object
+      properties:
+        list_id:
+          type: string
+          example: "1001"
+        id:
+          type: integer
+          example: 101
+        name:
+          type: string
+          example: "John Doe"
+        username:
+          type: string
+          example: "johndoe"
+        password:
+          type: string
+          example: "secret123"
+        m3u:
+          type: string
+          example: "a8fbc1d2"
+        epg:
+          type: string
+          example: "e9f0a1b2"
+        expiry:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2027-01-01T00:00:00Z"
+        max_connections:
+          type: integer
+          example: 1
+        active_connections:
+          type: integer
+          example: 0
+        is_online:
+          type: boolean
+          example: false
+        is_suspended:
+          type: boolean
+          example: false
+        channels_categories:
+          type: array
+          items:
+            type: integer
+          nullable: true
+          example: [1, 5, 8]
+        vods_categories:
+          type: array
+          items:
+            type: integer
+          nullable: true
+          example: [10, 12]
+        series_categories:
+          type: array
+          items:
+            type: integer
+          nullable: true
+          example: [20, 22]
+        patterns:
+          type: array
+          items:
+            $ref: "#/components/schemas/PatternItem"
+        note:
+          type: string
+          nullable: true
+          example: "VIP customer"
+        language:
+          type: string
+          nullable: true
+          example: "en"
+        message:
+          type: string
+          nullable: true
+        sync_expiry_date:
+          type: boolean
+          example: true
+        user_settings:
+          type: object
+          nullable: true
+          description: "Arbitrary custom settings stored for this user"
+          example:
+            theme: "dark"
+        is_compromised:
+          type: boolean
+          example: false
+        compromised_reason:
+          type: string
+          nullable: true
+          example: "Concurrent streaming detected across multiple distinct ASNs"
+        created_by_admin_id:
+          type: integer
+          nullable: true
+          example: 2
+        created_by_username:
+          type: string
+          nullable: true
+          example: "collaborator1"
+        createdAt:
+          type: string
+          format: date-time
+        updatedAt:
+          type: string
+          format: date-time
+
+    PatternItem:
+      type: object
+      properties:
+        type:
+          type: string
+          example: "xtream"
+        url:
+          type: string
+          example: "http://example.com:8080"
+        cUrl:
+          type: string
+          example: "http://custom-proxy.com"
+        useCUrl:
+          type: boolean
+          example: false
+        param1:
+          type: string
+          example: "upstream_user"
+        param2:
+          type: string
+          example: "upstream_pass"
+
+    CreateManagedUserRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "johndoe"
+        password:
+          type: string
+          example: "secret123"
+        name:
+          type: string
+          example: "John Doe"
+        max_connections:
+          type: integer
+          default: 1
+          example: 1
+        expiry:
+          type: string
+          format: date-time
+          nullable: true
+          example: "2027-01-01T00:00:00Z"
+        channels_categories:
+          type: array
+          items:
+            type: integer
+          example: [1, 2, 3]
+        vods_categories:
+          type: array
+          items:
+            type: integer
+          example: [10, 11]
+        series_categories:
+          type: array
+          items:
+            type: integer
+          example: [20, 21]
+        patterns:
+          type: array
+          items:
+            $ref: "#/components/schemas/PatternItem"
+        note:
+          type: string
+          example: "VIP customer"
+        language:
+          type: string
+          example: "en"
+        message:
+          type: string
+        sync_expiry_date:
+          type: boolean
+          default: true
+        m3u:
+          type: string
+          description: "Optional custom short M3U URL token (must be unique). If omitted, an alphanumeric token is auto-generated."
+          example: "usr_m3u_token123"
+        epg:
+          type: string
+          description: "Optional custom short EPG URL token (must be unique and differ from m3u). If omitted, an alphanumeric token is auto-generated."
+          example: "usr_epg_token123"
+        is_suspended:
+          type: boolean
+          description: "Whether the user account is initially created suspended"
+          default: false
+          example: false
+        user_settings:
+          type: object
+          description: "Optional arbitrary key-value settings or client portal customization for this user"
+          example:
+            theme: "dark"
+
+    UpdateManagedUserRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "John Doe Updated"
+        expiry:
+          type: string
+          format: date-time
+          nullable: true
+        max_connections:
+          type: integer
+          example: 2
+        is_suspended:
+          type: boolean
+          example: false
+        channels_categories:
+          type: array
+          items:
+            type: integer
+        vods_categories:
+          type: array
+          items:
+            type: integer
+        series_categories:
+          type: array
+          items:
+            type: integer
+        patterns:
+          type: array
+          items:
+            $ref: "#/components/schemas/PatternItem"
+        note:
+          type: string
+        language:
+          type: string
+        message:
+          type: string
+        sync_expiry_date:
+          type: boolean
+        user_settings:
+          type: object
+          description: "Arbitrary key-value settings or client portal customization for this user"
+          example:
+            theme: "dark"
+        is_compromised:
+          type: boolean
+          description: "Flag indicating whether the user account has been marked as compromised"
+          example: false
+        compromised_reason:
+          type: string
+          nullable: true
+          description: "Reason or security notes detailing why the user was flagged as compromised"
+          example: "Concurrent streaming detected across multiple distinct ASNs"
+
+    CredentialsRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: "New username (leave empty or omit to keep unchanged)"
+          example: "client_user_42"
+        password:
+          type: string
+          description: "New password (leave empty or omit to keep unchanged)"
+          example: "NewPass1234!"
+        m3u:
+          type: string
+          description: "Optional new custom M3U token (must be unique and differ from EPG token)"
+          example: "new_m3u_token"
+        epg:
+          type: string
+          description: "Optional new custom EPG token (must be unique and differ from M3U token)"
+          example: "new_epg_token"
+
+    BulkCategoriesRequest:
+      type: object
+      required:
+        - updates
+      properties:
+        updates:
+          type: array
+          items:
+            $ref: "#/components/schemas/CategoryUpdateItem"
+
+    CategoryUpdateItem:
+      type: object
+      required:
+        - id
+      properties:
+        id:
+          type: integer
+          description: "Managed user ID"
+          example: 101
+        channels_categories:
+          type: array
+          items:
+            type: integer
+          description: "Allowed Live TV category IDs (empty or null for all)"
+          example: [1, 2, 3]
+        vods_categories:
+          type: array
+          items:
+            type: integer
+          description: "Allowed VOD/Movie category IDs (empty or null for all)"
+          example: [10, 11]
+        series_categories:
+          type: array
+          items:
+            type: integer
+          description: "Allowed Series category IDs (empty or null for all)"
+          example: [20, 21]
+
+    BulkPatternRequest:
+      type: object
+      required:
+        - action
+        - scope
+      properties:
+        action:
+          type: string
+          enum: [rename_url, remove, add, update_curl]
+          description: "Pattern operation to perform"
+          example: "rename_url"
+        scope:
+          type: string
+          enum: [playlist, selected, all_playlists]
+          description: "Target scope of users"
+          example: "playlist"
+        user_ids:
+          type: array
+          items:
+            type: integer
+          description: "Specific user IDs when scope is 'selected'"
+          example: [101, 102]
+        old_url:
+          type: string
+          description: "Original provider URL to match for 'rename_url' or 'remove'"
+          example: "http://old-provider.com:8080"
+        new_url:
+          type: string
+          description: "Replacement provider URL for 'rename_url'"
+          example: "http://new-provider.com:8080"
+        replace_mode:
+          type: string
+          enum: [exact, substring]
+          default: exact
+          description: "URL replacement matching mode"
+          example: "exact"
+        target_type:
+          type: string
+          description: "Optional filter for pattern type (e.g. 'xtream')"
+          example: "xtream"
+        update_playlist:
+          type: boolean
+          default: false
+          description: "Whether to also apply the pattern changes to playlist-level default patterns"
+          example: false
+        update_curl:
+          type: boolean
+          description: "Whether to update or replace the cUrl (custom proxy) setting"
+          example: false
+        curl:
+          type: string
+          description: "Custom stream proxy URL for 'update_curl'"
+          example: "http://custom-proxy.com"
+        use_curl:
+          type: boolean
+          description: "Whether to enable custom stream proxy for 'update_curl'"
+          example: true
+        new_pattern:
+          $ref: "#/components/schemas/PatternItem"
+
+    ForceSyncRequest:
+      type: object
+      properties:
+        username:
+          type: string
+          description: "Upstream provider username"
+          example: "upstream_user"
+        password:
+          type: string
+          description: "Upstream provider password"
+          example: "upstream_pass"
+        raw_response:
+          type: object
+          description: "Optional pre-fetched Xtream player_api.json auth response body"
+        patterns:
+          type: array
+          items:
+            $ref: "#/components/schemas/PatternItem"
+          description: "Optional provider patterns to use for syncing"
+
+    TeamMember:
+      type: object
+      properties:
+        id:
+          type: integer
+          example: 2
+        username:
+          type: string
+          example: "collaborator_john"
+        role:
+          type: string
+          enum: [admin, collaborator]
+          example: "collaborator"
+        manage_all_playlists:
+          type: boolean
+          example: false
+        allowed_playlist_ids:
+          type: array
+          items:
+            type: string
+          example: ["1001", "1002"]
+        can_see_all_users:
+          type: boolean
+          example: false
+        can_create_collaborators:
+          type: boolean
+          example: true
+        can_create_admins:
+          type: boolean
+          example: false
+        can_manage_api_tokens:
+          type: boolean
+          example: true
+        created_by:
+          type: integer
+          nullable: true
+          example: 1
+        created_by_username:
+          type: string
+          nullable: true
+          example: "admin"
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTeamMemberRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+          example: "new_staff"
+        password:
+          type: string
+          example: "StaffSecure123!"
+        role:
+          type: string
+          enum: [admin, collaborator]
+          default: collaborator
+        manage_all_playlists:
+          type: boolean
+          default: false
+        allowed_playlist_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          example: [1001]
+        can_see_all_users:
+          type: boolean
+          default: false
+        can_create_collaborators:
+          type: boolean
+          default: false
+        can_create_admins:
+          type: boolean
+          default: false
+        can_manage_api_tokens:
+          type: boolean
+          default: false
+
+    UpdateTeamMemberRequest:
+      type: object
+      properties:
+        password:
+          type: string
+          description: Leave empty to retain current password
+        role:
+          type: string
+          enum: [admin, collaborator]
+        manage_all_playlists:
+          type: boolean
+        allowed_playlist_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+        can_see_all_users:
+          type: boolean
+        can_create_collaborators:
+          type: boolean
+        can_create_admins:
+          type: boolean
+        can_manage_api_tokens:
+          type: boolean
+
+    APIToken:
+      type: object
+      properties:
+        id:
+          type: integer
+          format: int64
+          example: 1
+        admin_id:
+          type: integer
+          example: 2
+        name:
+          type: string
+          example: "Zapier Integration"
+        token_prefix:
+          type: string
+          example: "plt_live_7a8f...bc12"
+        token:
+          type: string
+          description: Full plaintext token. Returned ONLY on creation.
+          example: "plt_live_7a8f9c10d2e3f4a5b6c7d8e9f0123456789abcdef0123456789abcdef0123456"
+        has_password:
+          type: boolean
+          example: true
+        allowed_ips:
+          type: string
+          description: Optional comma-separated list of allowed IP addresses or CIDRs.
+          example: "192.168.1.50, 10.0.0.0/24"
+        allowed_playlist_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: Optional list of playlist IDs this token is allowed to access. Empty or omitted means unrestricted access across all playlists managed by creator.
+          example: [1001, 1002]
+        last_used_at:
+          type: string
+          format: date-time
+          nullable: true
+        expires_at:
+          type: string
+          format: date-time
+          nullable: true
+        is_active:
+          type: boolean
+          example: true
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateTokenRequest:
+      type: object
+      required:
+        - name
+      properties:
+        name:
+          type: string
+          example: "Billing CRM Bot"
+        password:
+          type: string
+          description: Optional password. If specified, clients must also provide this password in X-Token-Password.
+          example: "SuperSecretTokenPassword!"
+        allowed_ips:
+          type: string
+          description: Optional comma-separated list of allowed IP addresses or CIDRs. If empty, all IPs are allowed.
+          example: "192.168.1.50, 10.0.0.0/24"
+        allowed_playlist_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: Optional list of playlist IDs this token is allowed to access. Empty or omitted means unrestricted access across all playlists managed by creator.
+          example: [1001, 1002]
+        expires_in_days:
+          type: integer
+          description: Number of days until token expiration. Set 0 for never expires.
+          example: 90
+
+    UpdateTokenRequest:
+      type: object
+      properties:
+        name:
+          type: string
+          example: "Updated CRM Bot"
+        password:
+          type: string
+          description: New password for token access. Provide empty string or leave unchanged if not updating.
+          example: "NewStrongPassword123!"
+        remove_password:
+          type: boolean
+          description: Set to true to remove password protection entirely.
+          example: false
+        allowed_ips:
+          type: string
+          description: Comma-separated list of allowed IP addresses or CIDRs. Provide empty string to allow all IPs.
+          example: "192.168.1.50, 10.0.0.0/24"
+        allowed_playlist_ids:
+          type: array
+          items:
+            type: integer
+            format: int64
+          description: List of playlist IDs this token is allowed to access. Provide empty array to allow all playlists managed by creator.
+          example: [1001]
+
+    ErrorResponse:
+      type: object
+      properties:
+        error:
+          type: string
+          example: "invalid_request"
+        message:
+          type: string
+          example: "Invalid parameters supplied"
+
+  responses:
+    BadRequest:
+      description: Invalid request parameters or body
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Unauthorized:
+      description: Authentication failed, missing token, expired token, or invalid token password
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    Forbidden:
+      description: Access denied, insufficient permissions, API tokens disabled for this account, or IP address blocked
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"
+    NotFound:
+      description: Requested resource was not found
+      content:
+        application/json:
+          schema:
+            $ref: "#/components/schemas/ErrorResponse"

@@ -1,0 +1,19 @@
+{
+  "name": "playlistlabs_user_management_os",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "dev": "npx concurrently -n \"GO_SERVER,VITE_WEB\" -c \"cyan,magenta\" \"npm run dev:server:watch\" \"npm run dev:web\"",
+    "dev:web": "npm --prefix web run dev",
+    "build:web": "npm --prefix web run build",
+    "dev:server": "go run ./cmd/server",
+    "dev:server:watch": "air",
+    "dev:syncer": "go run ./cmd/syncer",
+    "dev:sync-customers": "go run ./cmd/customer_syncer",
+    "reset-password": "go run ./cmd/reset_password",
+    "reset-password:docker": "docker compose exec server reset_password",
+    "build:server": "go build -o bin/server ./cmd/server",
+    "docs:dev": "npm --prefix docs run start",
+    "docs:build": "npm --prefix docs run build"
+  }
+}

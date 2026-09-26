@@ -1,0 +1,31 @@
+# Local Environment & Secrets
+.env
+secrets/
+*.pem
+*.key
+
+# Compiled Binaries & Caches
+*.exe
+*.dll
+*.so
+*.dylib
+/dashboard
+/server
+tmp/
+bin/
+
+# Node & Frontend
+web/node_modules/
+web/dist/
+.vite/
+
+# Runtime Data & Backups
+data/
+backups/
+*.log
+
+# IDE & OS
+.vscode/
+.idea/
+.DS_Store
+Thumbs.db

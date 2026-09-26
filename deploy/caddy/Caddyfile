@@ -1,0 +1,132 @@
+{
+	# Global options
+	admin off
+	auto_https disable_redirects
+	on_demand_tls {
+		ask {$ASK_DOMAIN_ENDPOINT:http://dashboard:8080/api/caddy/check-domain}
+	}
+}
+
+# Shared ingress routing rules for both primary domain and custom CNAME domains
+(ingress_routes) {
+	# Enable gzip and zstd compression by default for all text, json, xml, and IPTV playlist formats
+	encode {
+		gzip 5
+		zstd
+		minimum_length 256
+		match {
+			header Content-Type text/*
+			header Content-Type application/json*
+			header Content-Type application/javascript*
+			header Content-Type application/xml*
+			header Content-Type text/xml*
+			header Content-Type audio/mpegurl*
+			header Content-Type application/vnd.apple.mpegurl*
+			header Content-Type application/x-mpegurl*
+			header Content-Type image/svg+xml*
+		}
+	}
+
+	# Block Player branding banners (banner_w, banner_b, banner_w_pl, banner_b_pl) -> serve 1px transparent image
+	@blocked_banners path_regexp (?i)/banner_[wb](?:_[a-z0-9]+)?\.png$
+	handle @blocked_banners {
+		root * /etc/caddy
+		rewrite * /1x1.png
+		file_server
+	}
+
+	# Block STB branding logo -> serve 1px transparent image
+	@stb_blocked_logo {
+		header_regexp Host (?i)^stb\..+
+		path_regexp (?i)^/template/default/(?:i|i_480|i_720)/logo\.png$
+	}
+	handle @stb_blocked_logo {
+		root * /etc/caddy
+		rewrite * /1x1.png
+		file_server
+	}
+
+	# 1. STB / MAG Portal (stb.*): auto-rewrite login paths and proxy static assets to stb.playlistlabs.watch
+	@stb_auth {
+		header_regexp Host (?i)^stb\..+
+		path_regexp stb_auth ^/([a-zA-Z0-9_\.\-]+)/([a-zA-Z0-9_\.\-]+)/?$
+	}
+	redir @stb_auth /index.html?username={re.stb_auth.1}&password={re.stb_auth.2}&force_url=1 302
+
+	@stb_portal {
+		header_regexp Host (?i)^stb\..+
+	}
+	handle @stb_portal {
+		reverse_proxy http://stb.playlistlabs.watch {
+			header_up Host stb.playlistlabs.watch
+		}
+	}
+
+	# 2. Web Player (web.* or player.*): proxy webplayer assets to web.playlistlabs.watch
+	@web_root_empty {
+		header_regexp Host (?i)^(?:web|player)\..+
+		path /
+		expression {query} == ''
+	}
+	redir @web_root_empty /?force_url=1 302
+
+	@web_root_query {
+		header_regexp Host (?i)^(?:web|player)\..+
+		path /
+		expression {query} != ''
+		not query force_url=*
+	}
+	redir @web_root_query /?{query}&force_url=1 302
+
+	@web_player {
+		header_regexp Host (?i)^(?:web|player)\..+
+	}
+	handle @web_player {
+		reverse_proxy http://web.playlistlabs.watch {
+			header_up Host web.playlistlabs.watch
+		}
+	}
+
+	# 3. Stream Redirector: matches stream playback routes or timeshift.php
+	# Matches: /(live/)?{username}/{password}/{id}, /{type}/{username}/{password}/{id}, or timeshift.php
+	@redirector {
+		not header_regexp Host (?i)^(?:stb|web|player)\..+
+		not path /api/* /assets/* /static/* /docs/* /users/* /playlists/* /portal-branding/* /info/* /dashboard/* /user-management/* /team/* /collaborators/* /subadmins/* /tokens/* /api-tokens/* /security/* /settings/* /portal/*
+		path_regexp redirector (?i)(?:^/(?:(?:live|movie|series|timeshift|vods|play)/)?[^/]+/[^/]+/[0-9]+(?:\.[a-z0-9]+)?/?$|timeshift\.php)
+	}
+	handle @redirector {
+		reverse_proxy {$REDIRECTOR_UPSTREAM:redirector:3100}
+	}
+
+	# 4. Xtream Codes API, Stalker Portal & M3U/XMLTV generator
+	@xtream {
+		not header_regexp Host (?i)^(?:stb|web|player)\..+
+		path /player_api.php* /panel_api.php* /my_player* /stalker* /get.php* /xmltv.php* /api/user-dashboard/config*
+	}
+	handle @xtream {
+		reverse_proxy {$XTREAM_UPSTREAM:xtream:8000}
+	}
+
+	# 5. Default: Dashboard UI (React SPA) and Management API (/api/*)
+	handle {
+		reverse_proxy {$DASHBOARD_UPSTREAM:dashboard:8080}
+	}
+}
+
+# Primary domain ingress (defaults to localhost for dev, or your domain e.g. iptv.example.com)
+{$DOMAIN:localhost} {
+	import ingress_routes
+}
+
+# Dynamic on-demand TLS ingress for authorized custom CNAME domains and subdomains (player.*, stb.*, etc.)
+https:// {
+	tls {
+		on_demand
+	}
+	import ingress_routes
+}
+
+# Catch-all HTTP ingress for custom CNAME domains, STB devices, and Let's Encrypt HTTP-01 challenges
+http:// {
+	import ingress_routes
+}
