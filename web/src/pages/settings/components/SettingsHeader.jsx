@@ -4,6 +4,7 @@ import {
   RefreshCw,
   Save,
   Search,
+  X,
 } from 'lucide-react';
 import { Button, PageHeader } from '../../../components/ui';
 
@@ -17,6 +18,7 @@ export default function SettingsHeader({
   isDirty = false,
   searchQuery = '',
   onSearchChange,
+  totalMatches,
 }) {
   const currentTabObj = tabs.find((t) => t.id === activeTab) || tabs[0];
 
@@ -48,15 +50,30 @@ export default function SettingsHeader({
       actions={
         <div className="flex items-center gap-2 flex-wrap sm:flex-nowrap justify-end">
           {onSearchChange && (
-            <div className="relative w-full sm:w-52">
+            <div className="relative w-full sm:w-56">
               <Search className="w-3.5 h-3.5 absolute left-2.5 top-1/2 -translate-y-1/2 text-[#8898aa] dark:text-slate-400" />
               <input
                 type="text"
                 value={searchQuery}
                 onChange={(e) => onSearchChange(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape') {
+                    onSearchChange('');
+                  }
+                }}
                 placeholder="Filter settings..."
-                className="w-full pl-8 pr-3 py-1.5 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-[0.375rem] text-xs text-[#32325d] dark:text-white placeholder-[#8898aa] dark:placeholder-slate-400 focus:outline-none focus:border-[#3970e1]"
+                className="w-full pl-8 pr-7 py-1.5 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-[0.375rem] text-xs text-[#32325d] dark:text-white placeholder-[#8898aa] dark:placeholder-slate-400 focus:outline-none focus:border-[#3970e1]"
               />
+              {searchQuery && (
+                <button
+                  type="button"
+                  onClick={() => onSearchChange('')}
+                  title="Clear filter (Esc)"
+                  className="absolute right-2 top-1/2 -translate-y-1/2 text-[#8898aa] hover:text-[#32325d] dark:hover:text-white p-0.5"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
             </div>
           )}
 

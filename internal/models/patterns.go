@@ -56,3 +56,20 @@ func MergePatterns(playlistPatterns, userPatterns []PatternItem) []PatternItem {
 
 	return merged
 }
+
+// SanitizePatterns trims leading and trailing whitespace from pattern fields (Param1, Param2, URL, CURL).
+func SanitizePatterns(patterns []PatternItem) []PatternItem {
+	if len(patterns) == 0 {
+		return patterns
+	}
+	res := make([]PatternItem, len(patterns))
+	for i, p := range patterns {
+		p.Param1 = strings.TrimSpace(p.Param1)
+		p.Param2 = strings.TrimSpace(p.Param2)
+		p.URL = strings.TrimSpace(p.URL)
+		p.CURL = strings.TrimSpace(p.CURL)
+		res[i] = p
+	}
+	return res
+}
+

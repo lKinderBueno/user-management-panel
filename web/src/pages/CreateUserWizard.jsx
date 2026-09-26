@@ -19,6 +19,11 @@ import MultiCategorySelect from '../components/MultiCategorySelect';
 import ProviderEditor from '../components/ProviderEditor';
 import CalendarPicker from '../components/CalendarPicker';
 import { PageHeader } from '../components/ui';
+import { sanitizePatterns } from '../utils/patterns';
+
+
+const STORAGE_COPY_CREDS_KEY = 'wizard_copy_creds_to_provider';
+const STORAGE_SYNC_EXPIRY_KEY = 'wizard_sync_expiry_date';
 
 export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCancel }) {
   const [currentStep, setCurrentStep] = React.useState(1);
@@ -43,7 +48,49 @@ export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCan
 
   // Provider State
   const [patterns, setPatterns] = React.useState([]);
-  const [copyCredsToProvider, setCopyCredsToProvider] = React.useState(true);
+  const [copyCredsToProvider, setCopyCredsToProvider] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_COPY_CREDS_KEY);
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleCopyCreds = (checked) => {
+    setCopyCredsToProvider(checked);
+    try {
+      localStorage.setItem(STORAGE_COPY_CREDS_KEY, String(checked));
+    } catch (e) {
+      console.error('Failed to save wizard sync preference to localStorage:', e);
+    }
+  };
+
+  const handlePatternsChange = (newPatterns) => {
+    setPatterns(newPatterns);
+    // If the user manually edits provider credentials so they differ from wizard credentials, disable auto sync
+    if (copyCredsToProvider && newPatterns?.length > 0) {
+      const first = newPatterns[0];
+      if (first && (first.param1 !== username || first.param2 !== password)) {
+        handleToggleCopyCreds(false);
+      }
+    }
+  };
+
+  // Live sync credentials into first provider pattern whenever copyCredsToProvider is active
+  React.useEffect(() => {
+    if (!copyCredsToProvider) return;
+    setPatterns((prevPatterns) => {
+      if (!prevPatterns || prevPatterns.length === 0) return prevPatterns;
+      const first = prevPatterns[0];
+      if (first?.param1 === username && first?.param2 === password) {
+        return prevPatterns;
+      }
+      return prevPatterns.map((p, idx) =>
+        idx === 0 ? { ...p, param1: username, param2: password } : p
+      );
+    });
+  }, [copyCredsToProvider, username, password]);
 
   // Expiry State
   const defaultExpiry = React.useMemo(() => {
@@ -53,7 +100,23 @@ export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCan
     return d.toISOString();
   }, []);
   const [expiry, setExpiry] = React.useState(defaultExpiry);
-  const [syncExpiryDate, setSyncExpiryDate] = React.useState(true);
+  const [syncExpiryDate, setSyncExpiryDate] = React.useState(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_SYNC_EXPIRY_KEY);
+      return saved !== null ? saved === 'true' : true;
+    } catch {
+      return true;
+    }
+  });
+
+  const handleToggleSyncExpiry = (checked) => {
+    setSyncExpiryDate(checked);
+    try {
+      localStorage.setItem(STORAGE_SYNC_EXPIRY_KEY, String(checked));
+    } catch (e) {
+      console.error('Failed to save wizard sync expiry preference to localStorage:', e);
+    }
+  };
 
   // Validation state
   const [usernameChecking, setUsernameChecking] = React.useState(false);
@@ -96,10 +159,17 @@ export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCan
             try { pList = JSON.parse(currentPlaylist.patterns); } catch { }
           }
         }
+
+        let isSyncActive = true;
+        try {
+          const savedSyncPref = localStorage.getItem(STORAGE_COPY_CREDS_KEY);
+          isSyncActive = savedSyncPref !== null ? savedSyncPref === 'true' : true;
+        } catch { }
+
         if (pList.length === 0) {
           pList = [{ type: 'xtream', url: '', param1: uRes.value, param2: pRes.value, useCUrl: false }];
-        } else if (pList[0]?.param1) {
-          setCopyCredsToProvider(false);
+        } else if (isSyncActive) {
+          pList = pList.map((p, idx) => (idx === 0 ? { ...p, param1: uRes.value, param2: pRes.value } : p));
         }
         setPatterns(pList);
       } catch (err) {
@@ -190,8 +260,9 @@ export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCan
         channels_categories: channelsCategories,
         vods_categories: vodsCategories,
         series_categories: seriesCategories,
-        patterns: finalPatterns,
+        patterns: sanitizePatterns(finalPatterns),
         expiry: syncExpiryDate ? null : (expiry || null),
+
         sync_expiry_date: syncExpiryDate,
       };
 
@@ -465,7 +536,10 @@ export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCan
                         try { pList = JSON.parse(currentPlaylist.patterns); } catch { }
                       }
                     }
-                    if (pList.length > 0) setPatterns(pList);
+                    if (pList.length > 0) {
+                      handleToggleCopyCreds(false);
+                      setPatterns(pList);
+                    }
                   }}
                   className="px-2.5 py-1 bg-white dark:bg-slate-800 hover:bg-[#f6f9fc] dark:hover:bg-slate-700 text-[#525f7f] dark:text-slate-300 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-semibold transition active:scale-[0.98] shadow-sm"
                 >
@@ -475,7 +549,7 @@ export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCan
 
               <ProviderEditor
                 patterns={patterns}
-                onChange={setPatterns}
+                onChange={handlePatternsChange}
                 showSync={false}
               />
 
@@ -483,7 +557,7 @@ export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCan
                 <input
                   type="checkbox"
                   checked={copyCredsToProvider}
-                  onChange={(e) => setCopyCredsToProvider(e.target.checked)}
+                  onChange={(e) => handleToggleCopyCreds(e.target.checked)}
                   className="rounded border-[#dee2e6] dark:border-slate-700 text-[#3970e1] focus:ring-0 cursor-pointer"
                 />
                 <span>Automatically sync credentials with source provider fields</span>
@@ -512,7 +586,7 @@ export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCan
                   <input
                     type="checkbox"
                     checked={syncExpiryDate}
-                    onChange={(e) => setSyncExpiryDate(e.target.checked)}
+                    onChange={(e) => handleToggleSyncExpiry(e.target.checked)}
                     className="mt-0.5 rounded border-[#dee2e6] dark:border-slate-700 text-[#3970e1] focus:ring-0 cursor-pointer"
                   />
                   <div>

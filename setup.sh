@@ -745,6 +745,13 @@ else
 fi
 echo -e "${GREEN}====================================================================${NC}"
 echo ""
+echo -e "Version active: ${CYAN}${TARGET_VERSION}${NC}"
+echo -e "Database credentials location:"
+echo -e "  - ${YELLOW}secrets/db_password.txt${NC}"
+echo -e "  - ${YELLOW}secrets/db_root_password.txt${NC}"
+echo -e "  - ${YELLOW}secrets/jwt_secret.txt${NC}"
+echo ""
+
 echo -e "Access your Management Dashboard & API Gateway:"
 if [ "$EFFECTIVE_DOMAIN" != "localhost" ]; then
     if [ "$HTTPS_ENABLED" -eq 1 ]; then
@@ -767,23 +774,9 @@ if [ "$HTTPS_ENABLED" -eq 0 ]; then
     echo -e "  ${YELLOW}    or route traffic through an existing reverse proxy (e.g. Nginx).${NC}"
 fi
 echo ""
-echo -e "Version active: ${CYAN}${TARGET_VERSION}${NC}"
-echo -e "Database credentials location:"
-echo -e "  - ${YELLOW}secrets/db_password.txt${NC}"
-echo -e "  - ${YELLOW}secrets/db_root_password.txt${NC}"
-echo -e "  - ${YELLOW}secrets/jwt_secret.txt${NC}"
-echo ""
 if [ "$IS_UPGRADE" -eq 0 ]; then
     echo -e "Initial Setup:"
     echo -e "  Open the dashboard in your browser to complete the initial setup wizard"
-    echo -e "  (create master admin, enter PlaylistLabs token, and configure streaming)."
     echo ""
 fi
-echo -e "Stack commands:"
-echo -e "  - Check status:    ${YELLOW}docker compose ps${NC}"
-echo -e "  - View logs:       ${YELLOW}docker compose logs -f${NC}"
-echo -e "  - Reset password:  ${YELLOW}./reset-password.sh${NC} (or ${YELLOW}./reset_password${NC})"
-echo -e "  - Stop stack:      ${YELLOW}docker compose down${NC}"
-echo -e "  - Update images:   ${YELLOW}docker compose pull && docker compose up -d${NC}"
-echo -e "  - Uninstall stack: ${YELLOW}./uninstall.sh${NC}"
 echo ""

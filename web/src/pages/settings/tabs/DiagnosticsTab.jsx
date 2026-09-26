@@ -16,8 +16,9 @@ import {
 } from 'lucide-react';
 import { diagnosticsApi } from '../../../api/client';
 import { Button } from '../../../components/ui';
+import { isSectionMatching } from '../constants/settingsSearchIndex';
 
-export default function DiagnosticsTab({ notify }) {
+export default function DiagnosticsTab({ notify, searchFilter: globalSearchFilter = '' }) {
   const [systemInfo, setSystemInfo] = useState(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
   const [logs, setLogs] = useState([]);
@@ -101,11 +102,19 @@ export default function DiagnosticsTab({ notify }) {
     return `${secs}s`;
   };
 
+  const showHealth =
+    isSectionMatching('diagnostics-health', globalSearchFilter) ||
+    isSectionMatching('diagnostics-database', globalSearchFilter) ||
+    isSectionMatching('diagnostics-specs', globalSearchFilter);
+  const showBundle = isSectionMatching('diagnostics-bundle', globalSearchFilter);
+  const showLogs = isSectionMatching('diagnostics-logs', globalSearchFilter);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* ========================================================= */}
       {/* 1. HEADER & SYSTEM OVERVIEW                               */}
       {/* ========================================================= */}
+      {showHealth && (
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-5 shadow-argon dark:shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-[#e9ecef] dark:border-slate-800">
           <div className="flex items-center gap-3">
@@ -186,10 +195,12 @@ export default function DiagnosticsTab({ notify }) {
           </div>
         </div>
       </div>
+      )}
 
       {/* ========================================================= */}
       {/* 2. DIAGNOSTIC BUNDLE DOWNLOAD (ONE-CLICK EXPORT)          */}
       {/* ========================================================= */}
+      {showBundle && (
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-4 shadow-argon dark:shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-4">
           <div className="flex items-center gap-3">
@@ -231,10 +242,12 @@ export default function DiagnosticsTab({ notify }) {
           </div>
         </div>
       </div>
+      )}
 
       {/* ========================================================= */}
       {/* 3. RUNTIME LOG VIEWER                                     */}
       {/* ========================================================= */}
+      {showLogs && (
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-4 shadow-argon dark:shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-[#e9ecef] dark:border-slate-800">
           <div className="flex items-center gap-3">
@@ -344,6 +357,7 @@ export default function DiagnosticsTab({ notify }) {
           )}
         </div>
       </div>
+      )}
     </div>
   );
 }

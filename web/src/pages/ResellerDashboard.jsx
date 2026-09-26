@@ -39,8 +39,9 @@ import {
 import { playlistApi, userApi, backupApi } from '../api/client';
 import ManagedUserGrid from '../components/ManagedUserGrid';
 import UserEditorPanel from '../components/UserEditorPanel';
-import { getEffectiveUserPatterns, safeParsePatterns } from '../utils/patterns';
+import { getEffectiveUserPatterns, safeParsePatterns, sanitizePatterns } from '../utils/patterns';
 import { syncProviderData } from '../utils/providerSync';
+
 import BulkUserEditorPanel from '../components/BulkUserEditorPanel';
 import UserInfoModal from '../components/UserInfoModal';
 import ChangeCredentialsModal from '../components/ChangeCredentialsModal';
@@ -711,11 +712,17 @@ export default function ResellerDashboard({
     if (!activeUser) return;
     setSaving(true);
     try {
-      const updated = await userApi.updateUser(currentPlaylist.id, activeUser.id, activeUser);
+      const cleanUser = {
+        ...activeUser,
+        name: typeof activeUser.name === 'string' ? activeUser.name.trim() : activeUser.name,
+        patterns: sanitizePatterns(activeUser.patterns),
+      };
+      const updated = await userApi.updateUser(currentPlaylist.id, cleanUser.id, cleanUser);
       setUsers((prev) => prev.map((u) => (u.id === updated.id ? updated : u)));
       setActiveUser(updated);
       showNotify('User settings saved successfully');
     } catch (err) {
+
       showNotify(err.message || 'Error saving user', 'error');
     } finally {
       setSaving(false);

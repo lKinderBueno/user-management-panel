@@ -48,6 +48,11 @@ export default function PatternForm({
             disabled={disabled}
             value={pattern.url || ''}
             onChange={(e) => setPattern({ ...pattern, url: e.target.value })}
+            onBlur={(e) => {
+              if (e.target.value !== e.target.value.trim()) {
+                setPattern({ ...pattern, url: e.target.value.trim() });
+              }
+            }}
             placeholder="http://example.com:8080"
             className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-mono text-[#32325d] dark:text-slate-100 placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 disabled:opacity-50 transition shadow-sm"
           />
@@ -66,11 +71,17 @@ export default function PatternForm({
             disabled={disabled}
             value={pattern.cUrl || pattern.url || ''}
             onChange={(e) => setPattern({ ...pattern, cUrl: e.target.value })}
+            onBlur={(e) => {
+              if (e.target.value !== e.target.value.trim()) {
+                setPattern({ ...pattern, cUrl: e.target.value.trim() });
+              }
+            }}
             placeholder="http://custom-dns.domain.com:8080"
             className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-mono text-[#32325d] dark:text-slate-100 placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 disabled:opacity-50 transition shadow-sm"
           />
         </div>
       )}
+
 
       {/* Params grid (e.g. Username / Password) */}
       <div className={`grid grid-cols-1 ${pType.param2 ? 'sm:grid-cols-2' : ''} gap-3`}>
@@ -84,6 +95,11 @@ export default function PatternForm({
             disabled={disabled}
             value={pattern.param1 || ''}
             onChange={(e) => setPattern({ ...pattern, param1: e.target.value })}
+            onBlur={(e) => {
+              if (e.target.value !== e.target.value.trim()) {
+                setPattern({ ...pattern, param1: e.target.value.trim() });
+              }
+            }}
             placeholder={`Enter ${pType.param1}`}
             className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-mono text-[#32325d] dark:text-slate-100 placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 disabled:opacity-50 transition shadow-sm"
           />
@@ -100,12 +116,18 @@ export default function PatternForm({
               disabled={disabled}
               value={pattern.param2 || ''}
               onChange={(e) => setPattern({ ...pattern, param2: e.target.value })}
+              onBlur={(e) => {
+                if (e.target.value !== e.target.value.trim()) {
+                  setPattern({ ...pattern, param2: e.target.value.trim() });
+                }
+              }}
               placeholder={`Enter ${pType.param2}`}
               className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-mono text-[#32325d] dark:text-slate-100 placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 disabled:opacity-50 transition shadow-sm"
             />
           </div>
         )}
       </div>
+
 
       {useCustomDns && (
         <div className="pt-1">

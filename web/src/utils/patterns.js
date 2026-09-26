@@ -18,6 +18,26 @@ export function safeParsePatterns(patterns) {
 }
 
 /**
+ * Trims leading and trailing whitespace from pattern fields (param1, param2, url, cUrl).
+ * @param {any} patterns
+ * @returns {Array<Object>}
+ */
+export function sanitizePatterns(patterns) {
+  const list = safeParsePatterns(patterns);
+  return list.map((p) => {
+    if (!p || typeof p !== 'object') return p;
+    return {
+      ...p,
+      param1: typeof p.param1 === 'string' ? p.param1.trim() : p.param1,
+      param2: typeof p.param2 === 'string' ? p.param2.trim() : p.param2,
+      url: typeof p.url === 'string' ? p.url.trim() : p.url,
+      cUrl: typeof p.cUrl === 'string' ? p.cUrl.trim() : p.cUrl,
+    };
+  });
+}
+
+
+/**
  * Returns the normalized identifier key for a pattern item based strictly on its URL.
  * Matching is strictly by URL: trimmed, lowercased, and without trailing slashes.
  * @param {Object} pattern

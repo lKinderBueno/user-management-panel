@@ -11,6 +11,7 @@ import {
   Layers,
 } from 'lucide-react';
 import { Switch, Button } from '../../../components/ui';
+import { isSectionMatching } from '../constants/settingsSearchIndex';
 
 export default function TrafficTab({
   form,
@@ -26,12 +27,19 @@ export default function TrafficTab({
   handleUpdatePlaylistField,
   handleSavePlaylistTracking,
   handleSaveSettings,
+  searchFilter = '',
 }) {
+  const showTrackingSection =
+    isSectionMatching('traffic-tracking', searchFilter) ||
+    isSectionMatching('traffic-buffer', searchFilter);
+  const showThrottlingSection = isSectionMatching('traffic-throttling', searchFilter);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* ========================================================= */}
       {/* 1. USER CONNECTION TRACKING & LIMITS                     */}
       {/* ========================================================= */}
+      {showTrackingSection && (
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-4 shadow-argon dark:shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-[#e9ecef] dark:border-slate-800">
           <div className="flex items-center gap-3">
@@ -229,10 +237,12 @@ export default function TrafficTab({
           </div>
         )}
       </div>
+      )}
 
       {/* ========================================================= */}
       {/* 2. REQUEST THROTTLING & RATE LIMITING SECTION             */}
       {/* ========================================================= */}
+      {showThrottlingSection && (
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-4 shadow-argon dark:shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#e9ecef] dark:border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -516,6 +526,7 @@ export default function TrafficTab({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }

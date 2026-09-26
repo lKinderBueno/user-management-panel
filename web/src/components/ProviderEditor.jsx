@@ -1,10 +1,10 @@
 import React from 'react';
 import { Server, RefreshCw, Info, RotateCcw } from 'lucide-react';
-import PatternForm, { getPanelType } from './PatternForm';
+import PatternForm from './PatternForm';
+import { safeParsePatterns, getPatternKey } from '../utils/patterns';
 
 export default function ProviderEditor({ 
   patterns = [], 
-  isInherited = false,
   playlistName = '',
   onResetToPlaylist = null,
   onResetCurrentProvider = null,
@@ -14,55 +14,51 @@ export default function ProviderEditor({
   disabled = false,
   showSync = true
 }) {
-  const patternList = React.useMemo(() => {
-    if (!patterns) return [];
-    if (Array.isArray(patterns)) return patterns;
-    try {
-      if (typeof patterns === 'string') return JSON.parse(patterns);
-    } catch {
-      return [];
+  const patternList = React.useMemo(() => safeParsePatterns(patterns), [patterns]);
+  const [selectedKey, setSelectedKey] = React.useState('');
+
+  const currentPattern = React.useMemo(() => {
+    if (patternList.length === 0) {
+      return {
+        type: 'xtream',
+        url: '',
+        param1: '',
+        param2: '',
+        useCUrl: false,
+        cUrl: '',
+        isInherited: false,
+      };
     }
-    return [];
-  }, [patterns]);
-
-  const [selectedUrl, setSelectedUrl] = React.useState(() => patternList[0]?.url || '');
-
-  React.useEffect(() => {
-    if (!selectedUrl && patternList.length > 0) {
-      setSelectedUrl(patternList[0].url);
-    }
-  }, [patternList, selectedUrl]);
-
-  // Find the selected provider pattern object
-  const currentPattern = patternList.find((p) => p.url === selectedUrl) || patternList[0] || {
-    type: 'xtream',
-    url: '',
-    param1: '',
-    param2: '',
-    useCUrl: false,
-    cUrl: '',
-    isInherited: false,
-  };
+    return (
+      patternList.find((p, idx) => (getPatternKey(p) || String(idx)) === selectedKey) ||
+      patternList[0]
+    );
+  }, [patternList, selectedKey]);
 
   const isCurrentInherited = !!currentPattern?.isInherited;
 
   const handleSetPattern = (updatedPattern) => {
     const customPat = { ...updatedPattern, isInherited: false };
-    const updatedList = patternList.map((p) => {
-      if (p.url === currentPattern.url) {
+    if (patternList.length === 0) {
+      onChange([customPat]);
+      return;
+    }
+
+    const targetKey = getPatternKey(currentPattern);
+    let updated = false;
+    const updatedList = patternList.map((p, idx) => {
+      const isMatch = targetKey ? getPatternKey(p) === targetKey : p === currentPattern || idx === 0;
+      if (isMatch && !updated) {
+        updated = true;
         return customPat;
       }
       return p;
     });
 
-    if (patternList.length === 0) {
-      updatedList.push(customPat);
-    }
-
     onChange(updatedList);
   };
 
-  const panelType = getPanelType(currentPattern?.type);
+  const currentKey = getPatternKey(currentPattern);
 
   return (
     <div className="space-y-3 bg-[#f8f9fe] dark:bg-slate-800/60 border border-[#dee2e6] dark:border-slate-800 rounded-lg p-3.5">
@@ -75,14 +71,14 @@ export default function ProviderEditor({
           </label>
           {isCurrentInherited ? (
             <span
-              className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60"
+              className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-amber-50 dark:bg-amber-950/50 text-amber-600 dark:text-amber-400 border border-amber-200 dark:border-amber-800/60"
               title="Inherited from original playlist"
             >
               Playlist Default
             </span>
           ) : (
             <span
-              className="text-[10px] font-semibold px-1.5 py-0.2 rounded bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60"
+              className="text-[10px] font-semibold px-1.5 py-0.5 rounded bg-blue-50 dark:bg-blue-950/50 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800/60"
               title="Customized for this user"
             >
               Custom Override
@@ -117,7 +113,7 @@ export default function ProviderEditor({
             </button>
           )}
 
-          {showSync && (!currentPattern?.type || currentPattern.type.toLowerCase() === 'xtream') && onForceSync && (currentPattern?.url || currentPattern?.curl) && (
+          {showSync && (!currentPattern?.type || currentPattern.type.toLowerCase() === 'xtream') && onForceSync && (currentPattern?.url || currentPattern?.cUrl) && (
             <button
               type="button"
               onClick={onForceSync}
@@ -147,20 +143,23 @@ export default function ProviderEditor({
       {patternList.length > 1 ? (
         <select
           disabled={disabled}
-          value={currentPattern.url}
-          onChange={(e) => setSelectedUrl(e.target.value)}
+          value={currentKey || '0'}
+          onChange={(e) => setSelectedKey(e.target.value)}
           className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-mono text-[#32325d] dark:text-slate-100 focus:outline-none focus:border-[#3970e1] disabled:opacity-50 shadow-sm"
         >
-          {patternList.map((p, idx) => (
-            <option key={idx} value={p.url}>
-              {p.url} ({p.type ? p.type.toUpperCase() : 'XTREAM'} - {p.isInherited ? 'Playlist Default' : 'Custom Override'})
-            </option>
-          ))}
+          {patternList.map((p, idx) => {
+            const itemKey = getPatternKey(p) || String(idx);
+            return (
+              <option key={itemKey} value={itemKey}>
+                {p.url || '(empty URL)'} ({p.type ? p.type.toUpperCase() : 'XTREAM'} - {p.isInherited ? 'Playlist Default' : 'Custom Override'})
+              </option>
+            );
+          })}
         </select>
       ) : (
         <div className="px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-mono text-[#32325d] dark:text-slate-100 flex items-center justify-between shadow-sm">
           <span className="truncate">{currentPattern.url || 'No provider URL configured'}</span>
-          <span className="text-[12px] px-1.5 py-0.5 rounded bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400 border border-[#3970e1]/20 dark:border-blue-700/40 uppercase font-sans font-bold">
+          <span className="text-xs px-1.5 py-0.5 rounded bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400 border border-[#3970e1]/20 dark:border-blue-700/40 uppercase font-sans font-bold">
             {currentPattern.type || 'xtream'}
           </span>
         </div>
@@ -170,7 +169,6 @@ export default function ProviderEditor({
       <PatternForm
         pattern={currentPattern}
         setPattern={handleSetPattern}
-        panelType={panelType}
         showDns={false}
         disabled={disabled}
         useCustomDns={true}

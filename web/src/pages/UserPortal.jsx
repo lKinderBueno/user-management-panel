@@ -427,7 +427,7 @@ export default function UserPortal() {
       default:
         return {
           key: 'c',
-          title: 'Live Channels Channels',
+          title: 'Live Channels',
           icon: Tv,
           items: categories.channels
         };
@@ -1342,14 +1342,6 @@ export default function UserPortal() {
                     </div>
                   )}
 
-                  <div className="rounded-lg bg-slate-950/70 border border-slate-800/80 p-3 text-xs text-slate-300 space-y-1">
-                    <div className="font-semibold text-slate-200 text-[13px]">How to configure your STB device:</div>
-                    <ol className="list-decimal list-inside space-y-0.5 text-[13px] text-slate-400">
-                      <li>Go to <strong>System Settings &rarr; Servers &rarr; Portals</strong> on your STB device.</li>
-                      <li>Enter the Portal URL above into <strong>Portal 1 URL</strong>.</li>
-                      <li>Save and restart your portal to load channels.</li>
-                    </ol>
-                  </div>
                 </div>
               </div>
             )}
@@ -1564,7 +1556,7 @@ export default function UserPortal() {
                   type="text"
                   value={searchQuery}
                   onChange={(e) => setSearchQuery(e.target.value)}
-                  placeholder={`Search ${currentTabConfig.title}...`}
+                  placeholder={`Search ${currentTabConfig.title} categories...`}
                   className={`w-full pl-9 pr-4 py-2 ${theme.inputBg} border ${theme.border} rounded-xl text-xs text-white placeholder-slate-500 focus:outline-none`}
                 />
               </div>

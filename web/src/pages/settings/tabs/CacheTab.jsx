@@ -6,6 +6,7 @@ import {
   Save,
 } from 'lucide-react';
 import { Switch, Button } from '../../../components/ui';
+import { isSectionMatching } from '../constants/settingsSearchIndex';
 
 export default function CacheTab({
   form,
@@ -15,7 +16,15 @@ export default function CacheTab({
   handleClearCache,
   handleSaveSettings,
   saving = false,
+  searchFilter = '',
 }) {
+  const showRedisMaster = isSectionMatching('cache-redis', searchFilter);
+  const showTtls = isSectionMatching('cache-ttls', searchFilter);
+  const showPurge = isSectionMatching('cache-purge', searchFilter);
+  const showCard = showRedisMaster || showTtls || showPurge;
+
+  if (!showCard) return null;
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* ========================================================= */}
@@ -97,6 +106,7 @@ export default function CacheTab({
         </div>
 
         {/* TTL Inputs Grid */}
+        {showTtls && (
         <div className="grid grid-cols-1 md:grid-cols-3 gap-4 pt-2">
           {/* 1. Auth TTL */}
           <div className="p-3.5 rounded-[0.375rem] border border-[#dee2e6] dark:border-slate-800 bg-white dark:bg-slate-800/80 space-y-2.5">
@@ -179,8 +189,10 @@ export default function CacheTab({
             </div>
           </div>
         </div>
+        )}
 
         {/* Manual Flush / Invalidation Actions */}
+        {showPurge && (
         <div className="pt-3 border-t border-[#e9ecef] dark:border-slate-800 flex flex-col md:flex-row md:items-center md:justify-between gap-3">
           <div>
             <div className="text-xs font-bold text-[#32325d] dark:text-white">Manual Cache Invalidation</div>
@@ -231,7 +243,9 @@ export default function CacheTab({
             </button>
           </div>
         </div>
+        )}
 
+        {(showTtls || showRedisMaster) && (
         <div className="flex items-center justify-end pt-2 border-t border-[#e9ecef] dark:border-slate-800">
           <button
             type="button"
@@ -243,6 +257,7 @@ export default function CacheTab({
             <span>Save Cache TTLs</span>
           </button>
         </div>
+        )}
       </div>
     </div>
   );

@@ -17,6 +17,7 @@ import {
   TriangleAlert,
 } from 'lucide-react';
 import { Switch, Button } from '../../../components/ui';
+import { isSectionMatching } from '../constants/settingsSearchIndex';
 
 export default function SyncTab({
   form,
@@ -42,12 +43,17 @@ export default function SyncTab({
   handleTriggerExpirySync,
   setShowImportEditorModal,
   formatDate,
+  searchFilter = '',
 }) {
+  const showPlaylistsSection = isSectionMatching('sync-playlists', searchFilter);
+  const showExpirySection = isSectionMatching('sync-expiry', searchFilter);
+
   return (
     <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 animate-in fade-in duration-200">
       {/* ========================================================= */}
       {/* 1. PLAYLIST SYNCHRONIZATION SECTION                      */}
       {/* ========================================================= */}
+      {showPlaylistsSection && (
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-4 shadow-argon dark:shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -407,10 +413,12 @@ export default function SyncTab({
           </button>
         </div>
       </div>
+      )}
 
       {/* ========================================================= */}
       {/* 2. EXPIRY DATE SYNCHRONIZATION SECTION                   */}
       {/* ========================================================= */}
+      {showExpirySection && (
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-4 shadow-argon dark:shadow-2xl">
         <div className="flex items-center justify-between">
           <div className="flex items-center gap-2.5">
@@ -550,6 +558,7 @@ export default function SyncTab({
           <span>{eStatus.is_running ? 'Syncing...' : 'Sync User Expirations Now'}</span>
         </button>
       </div>
+      )}
     </div>
   );
 }

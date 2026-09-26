@@ -146,8 +146,14 @@ export default function UserHiddenCategoriesModal({
   const totalHiddenCount = (settingsObj.c?.hc?.length || 0) + (settingsObj.m?.hc?.length || 0) + (settingsObj.s?.hc?.length || 0);
 
   return (
-    <Modal isOpen={isOpen} onClose={onClose} size="2xl">
+    <Modal
+      isOpen={isOpen}
+      onClose={onClose}
+      size="2xl"
+      className="flex flex-col h-[85vh] max-h-[750px] min-h-[450px]"
+    >
       <Modal.Header
+        className="shrink-0"
         icon={<EyeOff className="w-5 h-5 text-[#3970e1] dark:text-blue-400" />}
         iconClassName="bg-blue-50 dark:bg-blue-950/60 border border-blue-200 dark:border-blue-800"
         title={
@@ -163,7 +169,7 @@ export default function UserHiddenCategoriesModal({
       />
 
           {/* Subheader / Tabs */}
-          <div className="px-6 py-3 border-b border-[#e9ecef] dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap items-center justify-between gap-3">
+          <div className="shrink-0 px-6 py-3 border-b border-[#e9ecef] dark:border-slate-800 bg-white dark:bg-slate-900 flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-2">
               <button
                 type="button"
@@ -226,7 +232,7 @@ export default function UserHiddenCategoriesModal({
           </div>
 
           {/* Filter Toolbar */}
-          <div className="px-6 py-2.5 bg-[#f8f9fe]/50 dark:bg-slate-800/30 border-b border-[#e9ecef] dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
+          <div className="shrink-0 px-6 py-2.5 bg-[#f8f9fe]/50 dark:bg-slate-800/30 border-b border-[#e9ecef] dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
             <div className="relative flex-1 min-w-[200px]">
               <Search className="w-3.5 h-3.5 absolute left-3 top-1/2 -translate-y-1/2 text-slate-400" />
               <input
@@ -274,7 +280,7 @@ export default function UserHiddenCategoriesModal({
           </div>
 
           {/* Categories Grid / List */}
-          <Modal.Body className="p-6 max-h-[500px]">
+          <Modal.Body scrollable={true} maxHeight="" className="flex-1 min-h-0">
             {filteredCategories.length === 0 ? (
               <div className="py-12 text-center text-[#8898aa] dark:text-slate-500 text-xs">
                 No categories match the filter.
@@ -316,7 +322,7 @@ export default function UserHiddenCategoriesModal({
           </Modal.Body>
 
           {/* Footer */}
-          <Modal.Footer align="between">
+          <Modal.Footer align="between" className="shrink-0">
             <Button
               variant="secondary"
               onClick={handleReset}

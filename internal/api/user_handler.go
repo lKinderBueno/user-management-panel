@@ -284,7 +284,10 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 
 	if len(u.Patterns) == 0 {
 		u.Patterns = []byte("[]")
+	} else {
+		u.Patterns = sanitizePatternsJSON(u.Patterns)
 	}
+
 
 	// Set creator ID
 	creatorID := claims.AdminID
@@ -328,6 +331,9 @@ func (h *UserHandler) UpdateUser(w http.ResponseWriter, r *http.Request) {
 
 	u.ListID = listID
 	u.ID = id
+	if len(u.Patterns) > 0 {
+		u.Patterns = sanitizePatternsJSON(u.Patterns)
+	}
 
 	oldUser, _ := h.userRepo.GetUserByID(r.Context(), listID, id)
 	if oldUser == nil {
@@ -1167,3 +1173,20 @@ func (h *UserHandler) DeleteConnection(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(w, http.StatusOK, map[string]string{"message": "connection_closed"})
 }
+
+func sanitizePatternsJSON(raw json.RawMessage) json.RawMessage {
+	if len(raw) == 0 || string(raw) == "null" || string(raw) == "[]" {
+		return raw
+	}
+	var items []models.PatternItem
+	if err := json.Unmarshal(raw, &items); err != nil {
+		return raw
+	}
+	items = models.SanitizePatterns(items)
+	cleaned, err := json.Marshal(items)
+	if err != nil {
+		return raw
+	}
+	return cleaned
+}
+

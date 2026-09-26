@@ -18,6 +18,7 @@ import {
 } from 'lucide-react';
 import { settingsApi } from '../../../api/client';
 import { Switch, Button } from '../../../components/ui';
+import { isSectionMatching } from '../constants/settingsSearchIndex';
 
 export default function BackupTab({
   form,
@@ -52,8 +53,17 @@ export default function BackupTab({
   data = null,
   formatDate,
   formatFileSize,
+  searchFilter = '',
 }) {
   const localFileInputRef = React.useRef(null);
+
+  const showBackupSettings =
+    isSectionMatching('backup-automated', searchFilter) ||
+    isSectionMatching('backup-instant', searchFilter);
+  const showBackupRestore = isSectionMatching('backup-restore', searchFilter);
+  const showCard = showBackupSettings || showBackupRestore;
+
+  if (!showCard) return null;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
@@ -61,6 +71,8 @@ export default function BackupTab({
       {/* AUTOMATIC BACKUP & SERVER ARCHIVE SECTION                 */}
       {/* ========================================================= */}
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-5 shadow-argon dark:shadow-2xl">
+        {showBackupSettings && (
+        <div className="space-y-5">
         <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-[#e9ecef] dark:border-slate-800">
           <div className="flex items-center gap-3">
             <div className="w-9 h-9 rounded-[0.375rem] bg-[#2dce89]/10 border border-[#2dce89]/20 flex items-center justify-center text-[#2dce89]">
@@ -374,6 +386,8 @@ export default function BackupTab({
             </div>
           </div>
         </div>
+        </div>
+        )}
 
         {/* Snapshot Status Card */}
         <div className="p-3.5 rounded-[0.375rem] bg-[#f8f9fe] dark:bg-slate-800/60 border border-[#e9ecef] dark:border-slate-700 grid grid-cols-1 sm:grid-cols-3 gap-4 text-xs">
@@ -394,6 +408,8 @@ export default function BackupTab({
         </div>
 
         {/* Server Backups Table */}
+        {showBackupRestore && (
+        <>
         <div className="space-y-3">
           <div className="flex items-center justify-between">
             <h3 className="text-xs font-bold text-[#32325d] dark:text-white uppercase tracking-wider flex items-center gap-1.5">
@@ -601,6 +617,8 @@ export default function BackupTab({
             </div>
           </div>
         </div>
+        </>
+        )}
       </div>
     </div>
   );

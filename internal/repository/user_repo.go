@@ -45,7 +45,7 @@ func (r *UserRepo) GetUsersByPlaylist(ctx context.Context, listID uint64, creato
 		FROM managed_users mu
 		LEFT JOIN admins a ON mu.created_by_admin_id = a.id
 		WHERE mu.list_id = ? %s
-		ORDER BY mu.id ASC
+		ORDER BY mu.id DESC
 	`, creatorFilter)
 
 	rows, err := r.db.QueryContext(ctx, query, args...)
@@ -265,7 +265,7 @@ func (r *UserRepo) GetAllUsers(ctx context.Context) ([]models.ManagedUser, error
 			mu.createdAt, mu.updatedAt
 		FROM managed_users mu
 		LEFT JOIN admins a ON mu.created_by_admin_id = a.id
-		ORDER BY mu.list_id ASC, mu.id ASC
+		ORDER BY mu.list_id ASC, mu.id DESC
 	`
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {

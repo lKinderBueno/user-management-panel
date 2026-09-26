@@ -185,7 +185,7 @@ export default function ManagedUserGrid({
   const [columnOrder, setColumnOrder] = React.useState(initialPrefs.columnOrder);
   const [columnSizing, setColumnSizing] = React.useState(initialPrefs.columnSizing);
   const [columnVisibility, setColumnVisibility] = React.useState(initialPrefs.columnVisibility);
-  const [sorting, setSorting] = React.useState([{ id: 'id', desc: false }]);
+  const [sorting, setSorting] = React.useState([{ id: 'id', desc: true }]);
   const [revealedPasswords, setRevealedPasswords] = React.useState({});
   const [showColumnMenu, setShowColumnMenu] = React.useState(false);
   const columnMenuRef = React.useRef(null);
@@ -875,20 +875,27 @@ export default function ManagedUserGrid({
     setColumnOrder(DEFAULT_COLUMN_ORDER);
     setColumnSizing(DEFAULT_COLUMN_SIZING);
     setColumnVisibility(DEFAULT_COLUMN_VISIBILITY);
+    setSorting([{ id: 'id', desc: true }]);
   };
 
-  // Dedicated sort toggle handler: None -> Asc -> Desc -> Reset
+  // Dedicated sort toggle handler: None -> Asc -> Desc -> Reset (or Desc -> Asc -> Reset for id)
   const handleSortToggle = (colId) => {
     if (isResizingAnyColumn) return;
     setSorting((prev) => {
       const current = prev.find((s) => s.id === colId);
       if (!current) {
-        return [{ id: colId, desc: false }];
+        return [{ id: colId, desc: colId === 'id' ? true : false }];
+      }
+      if (colId === 'id') {
+        if (current.desc) {
+          return [{ id: colId, desc: false }];
+        }
+        return [{ id: colId, desc: true }];
       }
       if (!current.desc) {
         return [{ id: colId, desc: true }];
       }
-      return []; // Reset sort
+      return [{ id: 'id', desc: true }]; // Reset sort back to default
     });
   };
 

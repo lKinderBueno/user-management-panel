@@ -2243,10 +2243,7 @@
           "user_settings": {
             "type": "object",
             "nullable": true,
-            "description": "Arbitrary custom settings stored for this user",
-            "example": {
-              "theme": "dark"
-            }
+            "description": "Arbitrary custom settings stored for this user"
           },
           "is_compromised": {
             "type": "boolean",
@@ -2406,10 +2403,7 @@
           },
           "user_settings": {
             "type": "object",
-            "description": "Optional arbitrary key-value settings or client portal customization for this user",
-            "example": {
-              "theme": "dark"
-            }
+            "description": "Optional arbitrary key-value settings or client portal customization for this user"
           }
         }
       },
@@ -2471,10 +2465,7 @@
           },
           "user_settings": {
             "type": "object",
-            "description": "Arbitrary key-value settings or client portal customization for this user",
-            "example": {
-              "theme": "dark"
-            }
+            "description": "Arbitrary key-value settings or client portal customization for this user"
           },
           "is_compromised": {
             "type": "boolean",

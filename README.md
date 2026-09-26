@@ -1,124 +1,175 @@
+# User Management Panel & Gateway (Community Edition)
 
-# Running Locally & Development
+Open-source web dashboard and management panel designed for high performance, multi-user access control, automated synchronization, and Xtream Codes compatible streaming architectures.
 
-The open-source repository contains the complete source code for both the **Web Dashboard UI** (`web/`) and the **Dashboard REST API Backend** (`cmd/dashboard`, `internal/api/`).
-
-If you are a developer looking to contribute, customize the interface, or test changes, you can run **just the dashboard and its backend** locally from source without starting the streaming engines (`xtream`, `redirector`, `syncer`) or the Caddy ingress gateway.
-
+> 📖 **Comprehensive Step-by-Step Guide**: For detailed instructions on installation, initial setup wizard, features walkthrough, recommended settings, and domain setup with Cloudflare & SSL, check [**docs/INSTALLATION_AND_USAGE_GUIDE.md**](docs/INSTALLATION_AND_USAGE_GUIDE.md).
 
 ---
 
-## 1. System Requirements
+## Architecture Overview
 
-Before running the project from source, ensure you have the following installed on your development machine:
+This project uses an **Open-Core** architecture:
+- **Open Source (`web/`, `cmd/dashboard`, `internal/api`)**: Complete web dashboard UI (Vite SPA) and REST administration API.
+- **Closed Source / Managed Engines (`xtream`, `redirector`, `syncer`)**: High-throughput Xtream Codes emulation API, ultra-fast streaming redirector, and background synchronization engine distributed as pre-compiled, hardened container images from [GitHub Container Registry](https://github.com/lkinderbueno?tab=packages).
 
-- **Node.js**: `v24.0.0` or higher (with `npm`).
-- **Go**: `1.22` or higher (if modifying or compiling the backend).
-- **Git**: For version control.
-- **Docker**: *(Optional, but recommended)* To run MariaDB with a single command.
+```mermaid
+flowchart TD
+    Client[App / Browser] -->|Port 80/443| Caddy[Caddy Reverse Proxy]
+    Caddy -->|Dashboard UI / Admin API :8080| Dash[Dashboard - Open Source]
+    Caddy -->|Xtream Codes API :8000| Xtream[Xtream API Engine - GHCR Image]
+    Caddy -->|Streaming Redirector :3100| Redir[Redirector Router - GHCR Image]
 
----
+    Dash --> DB[(MariaDB Database)]
+    Dash --> Redis[(Redis Cache)]
+    Dash -->|Sync Trigger :8090| Sync[Syncer Engine - GHCR Image]
 
-## 2. Setting Up the Database
-
-The Go backend requires a connection to a MariaDB database (Redis is optional for development).
-
-If you have Docker installed, spin up a MariaDB container in seconds:
-
-```bash
-docker run -d --name mariadb -p 3306:3306 \
-  -e MARIADB_ROOT_PASSWORD=root \
-  -e MARIADB_DATABASE=playlistlabs \
-  -e MARIADB_USER=playlistlabs \
-  -e MARIADB_PASSWORD=playlistlabspass \
-  mariadb:10.11
+    Xtream --> DB
+    Xtream --> Redis
+    Redir --> DB
+    Redir --> Redis
+    Sync --> DB
 ```
 
-*(Alternatively, if working within the repository workspace, you can start only the database using: `docker compose up -d mariadb`)*
+---
 
-Next, create your local configuration by copying the example environment file in the project root:
+## Quick Start (One-Line Installer)
 
+On a clean Ubuntu/Debian server, update system packages and install Docker:
+```bash
+sudo apt update && sudo apt upgrade -y
+curl -fsSL https://get.docker.com | sh
+```
+
+Then run the one-line panel installer:
+```bash
+curl -fsSL https://ump.playlistlabs.io/setup.sh | bash
+```
+
+The script guides you through:
+1. Verifying Docker & Compose readiness (or installs Docker if missing).
+2. Choosing your MariaDB user & root passwords (or pressing Enter for strong auto-generated passwords).
+3. Selecting your HTTP port for Caddy (verifying port availability on your host; defaults domain to localhost and your server IP).
+4. Selecting the application version to deploy (default: `latest`).
+5. Pulling container images and booting up the entire platform safely behind Caddy.
+
+Once started, open **`http://<your-server-ip>`** (or **`http://<your-server-ip>:<port>`** / **`https://<your-domain>`**) in your browser to complete the initial setup wizard. All traffic is securely routed through the Caddy gateway.
+
+### Unattended & Automated Installation (CLI Arguments)
+
+To deploy or upgrade automatically without interactive prompts (ideal for automated scripts, cloud-init, or CI/CD):
+
+```bash
+# 100% unattended installation with auto-generated secure credentials:
+curl -fsSL https://ump.playlistlabs.io/setup.sh | bash -s -- -y
+
+# Unattended with custom port, domain, and credentials:
+curl -fsSL https://ump.playlistlabs.io/setup.sh | bash -s -- -p 8080 -d panel.example.com --db-pass "MySecretPass!" -y
+```
+
+Available arguments:
+- `-p, --port <port>`: HTTP port for Caddy (default: `80`)
+- `-d, --domain <domain>`: Primary domain or server IP (default: `localhost`)
+- `-v, --version <tag>`: Application version (default: `latest`)
+- `--db-pass <password>`: MariaDB user password
+- `--db-root-pass <password>`: MariaDB root password
+- `--dir <directory>`: Installation directory (default: `user-management-panel`)
+- `-y, --yes, --non-interactive`: Run unattended without prompts
+- `-h, --help`: Display help and options
+
+---
+
+## Manual Installation with Docker Compose
+
+If you prefer installing manually:
+
+### 1. Clone the repository
+```bash
+git clone https://github.com/lkinderbueno/user-management-panel.git
+cd user-management-panel
+```
+
+### 2. Configure Environment Variables & Secrets
 ```bash
 cp .env.example .env
+mkdir -p secrets
+openssl rand -base64 24 > secrets/db_password.txt
+openssl rand -base64 24 > secrets/db_root_password.txt
+openssl rand -base64 32 > secrets/jwt_secret.txt
 ```
 
-The default connection string in `.env.example` points directly to `127.0.0.1:3306` with user `playlistlabs` and password `playlistlabspass`.
+Edit `.env` to configure your `HTTP_PORT` (default 80) and `DOMAIN` if needed.
+
+### 3. Start the Platform
+```bash
+docker compose up -d
+```
+
+Open your browser and navigate to:
+```
+http://localhost (or http://localhost:<HTTP_PORT>)
+```
+On first launch, the **Initial Setup Wizard** will guide you to create the initial Administrator account.
+
+### Password Reset & Account Recovery
+
+If you lose your administrator password or get blocked by the anti-brute-force system:
+
+```bash
+# Direct execution inside the running dashboard container:
+docker compose exec dashboard reset_password
+
+# Or set a specific password:
+docker compose exec dashboard reset_password -u admin -p "MyNewPassword123!"
+
+# Or run via universal helper script:
+./reset-password.sh
+```
 
 ---
 
-## 3. Live Development Mode (No Compilation Needed)
+## Development & Building from Source
 
-This is the recommended workflow for day-to-day UI and API development. It provides instant feedback with Hot Module Replacement (HMR).
-
-### Terminal 1: Start the Go Backend API
-From the root of the repository:
-
-```bash
-go run ./cmd/dashboard
-```
-
-- Go compiles the code in memory on the fly without producing a binary on disk.
-- On first startup, the backend automatically runs initial database migrations (`sql/001_init_schema.sql`) if the database is empty.
-- The REST API service starts listening on **`http://localhost:8080`**.
-
-### Terminal 2: Start the React Frontend Dev Server
-In a second terminal window, navigate to the `web/` directory:
-
-```bash
-cd web
-npm install
-npm run dev
-```
-
-- Vite starts a local development server on **`http://localhost:5173`**.
-- Any changes you save in `.jsx`, `.js`, or `.css` files reload immediately in your browser.
-- The built-in proxy in `vite.config.js` transparently forwards all API requests (`/api/*`, `/player_api.php`, `/get.php`) from port `5173` to port `8080`.
-
-Open **`http://localhost:5173`** in your browser to access the dashboard.
-
----
-
-## 4. Compiling a Standalone Production Build
-
-If you made modifications and wish to bundle the application into a single self-contained binary:
-
-### 1. Compile the Frontend
+### Web Frontend (SPA)
 ```bash
 cd web
 npm install
 npm run build
-cd ..
 ```
-This produces minified, optimized HTML, JS, and CSS files inside `web/dist/`.
 
-### 2. Compile the Go Backend Binary
+### Dashboard Go Server
 ```bash
-go build -ldflags="-s -w" -o bin/dashboard ./cmd/dashboard
+go build -o dashboard ./cmd/dashboard
+./dashboard
 ```
-This generates a fast, statically linked binary (`bin/dashboard` on Linux/macOS or `bin/dashboard.exe` on Windows).
-
-### 3. Run the Compiled Dashboard
-Run the binary, instructing it where to find the compiled frontend assets:
-
-```bash
-STATIC_DIR=web/dist ./bin/dashboard
-```
-
-*(On Windows PowerShell: `$env:STATIC_DIR="web/dist"; .\bin\dashboard.exe`)*
-
-Open **`http://localhost:8080`** in your browser. The single Go binary now serves both the React production frontend and all REST endpoints simultaneously.
 
 ---
 
-## 4. Building a Custom Docker Image
+## Uninstallation & Complete Cleanup
 
-If you want to package your custom code into a Docker image identical to the official releases:
+To completely stop and remove the platform, including all persistent database volumes, secrets, downloaded images, and configuration:
 
 ```bash
-docker build -f deploy/Dockerfile.dashboard -t custom-user-management-dashboard .
+# Complete uninstall & cleanup (with interactive confirmation):
+./uninstall.sh
+
+# Or via setup.sh:
+./setup.sh --uninstall
+
+# Unattended / non-interactive complete cleanup (zero prompts):
+./uninstall.sh -y
+
+# Or via curl one-liner without cloning:
+curl -fsSL https://ump.playlistlabs.io/uninstall.sh | bash -s -- -y
 ```
 
-The multi-stage `deploy/Dockerfile.dashboard` automatically:
-1. Installs Node.js dependencies and builds the React SPA.
-2. Compiles the Go backend binary using native Go cross-compilation.
-3. Copies only the binary and the static assets into a minimal Alpine Linux image.
+> **Note**: To remove containers while preserving database data and credentials, use `--keep-volumes`:
+> ```bash
+> ./uninstall.sh --keep-volumes
+> ```
+
+---
+
+## License
+
+The Dashboard and management UI are released under the [MIT License](LICENSE).
+The containerized streaming and syncer engines are proprietary software provided under the PlaylistLabs EULA.

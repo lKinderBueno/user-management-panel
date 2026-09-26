@@ -11,12 +11,15 @@ import {
   AlertCircle,
   Check,
   Terminal,
+  Search,
 } from 'lucide-react';
 import { settingsApi, backupApi, playlistApi } from '../../api/client';
 import SettingsHeader from './components/SettingsHeader';
 import SettingsNav from './components/SettingsNav';
 import RestoreBackupModal from './components/RestoreBackupModal';
 import ImportFromEditorModal from '../../components/ImportFromEditorModal';
+import SettingsSearchResults, { SettingsSearchEmptyState } from './components/SettingsSearchResults';
+import { searchSettings } from './constants/settingsSearchIndex';
 
 // Tabs
 import SyncTab from './tabs/SyncTab';
@@ -96,7 +99,7 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
   const [searchParams, setSearchParams] = useSearchParams();
 
   // Active Tab from URL search params (?tab=...)
-  const validTabs = ['sync', 'security', 'traffic', 'cache', 'portal', 'backups', 'diagnostics'];
+  const validTabs = ['sync', 'security', 'traffic', 'cache', 'portal', 'backups', 'diagnostics', 'all'];
   const tabFromUrl = searchParams.get('tab');
   const activeTab = validTabs.includes(tabFromUrl) ? tabFromUrl : 'sync';
 
@@ -115,6 +118,19 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
   const [saving, setSaving] = React.useState(false);
   const [clearingCacheScope, setClearingCacheScope] = React.useState(null);
   const [searchFilter, setSearchFilter] = React.useState('');
+
+  // Live Settings Search Engine
+  const searchResult = React.useMemo(() => {
+    return searchSettings(searchFilter);
+  }, [searchFilter]);
+
+  const {
+    isFiltering,
+    totalMatches,
+    matchingSections,
+    categoryMatchCounts,
+    categoriesWithMatches,
+  } = searchResult;
 
   // Form State
   const [form, setForm] = React.useState(DEFAULT_FORM_STATE);
@@ -1035,6 +1051,7 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
           isDirty={isDirty}
           searchQuery={searchFilter}
           onSearchChange={setSearchFilter}
+          totalMatches={totalMatches}
         />
 
         {/* 2-Column Responsive Category Layout */}
@@ -1044,131 +1061,195 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
             tabs={categories}
             activeTab={activeTab}
             onSelectTab={handleSelectTab}
+            isFiltering={isFiltering}
+            categoryMatchCounts={categoryMatchCounts}
+            totalMatches={totalMatches}
           />
 
           {/* Right Main Content Area */}
           <main className="flex-1 w-full min-w-0">
-            {activeTab === 'sync' && (
-              <SyncTab
-                form={form}
-                setForm={setForm}
-                pStatus={pStatus}
-                eStatus={eStatus}
-                tokenTestResult={tokenTestResult}
-                setTokenTestResult={setTokenTestResult}
-                showToken={showToken}
-                setShowToken={setShowToken}
-                showApiPassword={showApiPassword}
-                setShowApiPassword={setShowApiPassword}
-                testingToken={testingToken}
-                handleTestToken={handleTestToken}
-                showTmdbKey={showTmdbKey}
-                setShowTmdbKey={setShowTmdbKey}
-                testingTmdbKey={testingTmdbKey}
-                tmdbTestResult={tmdbTestResult}
-                setTmdbTestResult={setTmdbTestResult}
-                handleTestTMDBKey={handleTestTMDBKey}
-                actionLoading={actionLoading}
-                handleTriggerPlaylistSync={handleTriggerPlaylistSync}
-                handleTriggerExpirySync={handleTriggerExpirySync}
-                setShowImportEditorModal={setShowImportEditorModal}
-                formatDate={formatDate}
+            {/* If searching and in 'all' matches view */}
+            {isFiltering && activeTab === 'all' && (
+              <SettingsSearchResults
+                query={searchFilter}
+                matchingSections={matchingSections}
+                categories={categories}
+                onSelectCategory={handleSelectTab}
+                onClearFilter={() => setSearchFilter('')}
               />
             )}
 
-            {activeTab === 'security' && (
-              <SecurityTab
-                form={form}
-                setForm={setForm}
-                cleanForm={cleanFormRef.current}
-                captchaVerified={captchaVerified}
-                setCaptchaVerified={setCaptchaVerified}
-                handleSaveSettings={handleSaveSettings}
-                saving={saving}
-                onOpenSecurityCenter={() => navigate('/security')}
+            {/* If searching and the current tab has 0 matches */}
+            {isFiltering && activeTab !== 'all' && (categoryMatchCounts[activeTab] || 0) === 0 && (
+              <SettingsSearchEmptyState
+                query={searchFilter}
+                currentCategoryName={categories.find((c) => c.id === activeTab)?.name}
+                categoriesWithMatches={categoriesWithMatches}
+                onSelectCategory={handleSelectTab}
+                onClearFilter={() => setSearchFilter('')}
+                onViewAllMatches={() => handleSelectTab('all')}
               />
             )}
 
-            {activeTab === 'traffic' && (
-              <TrafficTab
-                form={form}
-                setForm={setForm}
-                displayedPlaylists={displayedPlaylists}
-                playlistSettings={playlistSettings}
-                savingPlaylistId={savingPlaylistId}
-                savingTimeout={savingTimeout}
-                saving={saving}
-                handleBulkSetTracking={handleBulkSetTracking}
-                handleSaveGlobalTimeout={handleSaveGlobalTimeout}
-                handleTogglePlaylistSwitch={handleTogglePlaylistSwitch}
-                handleUpdatePlaylistField={handleUpdatePlaylistField}
-                handleSavePlaylistTracking={handleSavePlaylistTracking}
-                handleSaveSettings={handleSaveSettings}
-              />
+            {/* If searching and current tab has matches, show subtle info banner */}
+            {isFiltering && activeTab !== 'all' && (categoryMatchCounts[activeTab] || 0) > 0 && (
+              <div className="flex flex-wrap items-center justify-between gap-2 px-4 py-2.5 mb-5 bg-[#ebf2ff] dark:bg-blue-950/40 border border-[#3970e1]/30 dark:border-blue-900/50 rounded-[0.375rem] text-xs text-[#3970e1] dark:text-blue-300">
+                <div className="flex items-center gap-2">
+                  <Search className="w-3.5 h-3.5 shrink-0" />
+                  <span>
+                    Showing {categoryMatchCounts[activeTab] || 0} {categoryMatchCounts[activeTab] === 1 ? 'section' : 'sections'} matching &ldquo;<strong>{searchFilter}</strong>&rdquo;
+                  </span>
+                </div>
+                <div className="flex items-center gap-3">
+                  <button
+                    type="button"
+                    onClick={() => handleSelectTab('all')}
+                    className="hover:underline font-semibold"
+                  >
+                    View all ({totalMatches}) matches &rarr;
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setSearchFilter('')}
+                    className="underline hover:text-[#2b5cc4] font-semibold"
+                  >
+                    Clear filter
+                  </button>
+                </div>
+              </div>
             )}
 
-            {activeTab === 'cache' && (
-              <CacheTab
-                form={form}
-                setForm={setForm}
-                cacheStatus={data?.cache_status}
-                clearingCacheScope={clearingCacheScope}
-                handleClearCache={handleClearCache}
-                handleSaveSettings={handleSaveSettings}
-                saving={saving}
-              />
-            )}
+            {/* Tab Contents: rendered when not in 'all' view and has matches (or not filtering) */}
+            {(!isFiltering || (categoryMatchCounts[activeTab] || 0) > 0) && (
+              <>
+                {activeTab === 'sync' && (
+                  <SyncTab
+                    form={form}
+                    setForm={setForm}
+                    pStatus={pStatus}
+                    eStatus={eStatus}
+                    tokenTestResult={tokenTestResult}
+                    setTokenTestResult={setTokenTestResult}
+                    showToken={showToken}
+                    setShowToken={setShowToken}
+                    showApiPassword={showApiPassword}
+                    setShowApiPassword={setShowApiPassword}
+                    testingToken={testingToken}
+                    handleTestToken={handleTestToken}
+                    showTmdbKey={showTmdbKey}
+                    setShowTmdbKey={setShowTmdbKey}
+                    testingTmdbKey={testingTmdbKey}
+                    tmdbTestResult={tmdbTestResult}
+                    setTmdbTestResult={setTmdbTestResult}
+                    handleTestTMDBKey={handleTestTMDBKey}
+                    actionLoading={actionLoading}
+                    handleTriggerPlaylistSync={handleTriggerPlaylistSync}
+                    handleTriggerExpirySync={handleTriggerExpirySync}
+                    setShowImportEditorModal={setShowImportEditorModal}
+                    formatDate={formatDate}
+                    searchFilter={searchFilter}
+                  />
+                )}
 
-            {activeTab === 'portal' && (
-              <PortalTab
-                form={form}
-                setForm={setForm}
-                playlists={playlists}
-                handleSaveSettings={handleSaveSettings}
-                saving={saving}
-                notify={notify}
-              />
-            )}
+                {activeTab === 'security' && (
+                  <SecurityTab
+                    form={form}
+                    setForm={setForm}
+                    cleanForm={cleanFormRef.current}
+                    captchaVerified={captchaVerified}
+                    setCaptchaVerified={setCaptchaVerified}
+                    handleSaveSettings={handleSaveSettings}
+                    saving={saving}
+                    onOpenSecurityCenter={() => navigate('/security')}
+                    searchFilter={searchFilter}
+                  />
+                )}
 
-            {activeTab === 'backups' && (
-              <BackupTab
-                form={form}
-                setForm={setForm}
-                bStatus={bStatus}
-                backups={backups}
-                backupScope={backupScope}
-                setBackupScope={setBackupScope}
-                backupPlaylistId={backupPlaylistId}
-                setBackupPlaylistId={setBackupPlaylistId}
-                backupIncludeToken={backupIncludeToken}
-                setBackupIncludeToken={setBackupIncludeToken}
-                displayedPlaylists={displayedPlaylists}
-                actionLoading={actionLoading}
-                handleTriggerBackup={handleTriggerBackup}
-                handleDownloadDirectBackup={handleDownloadDirectBackup}
-                handleDeleteBackup={handleDeleteBackup}
-                handleFileSelectForRestore={handleFileSelectForRestore}
-                setRestoreTarget={setRestoreTarget}
-                setRestoreMode={setRestoreMode}
-                setRestoreResult={setRestoreResult}
-                setRestoreUsers={setRestoreUsers}
-                setRestoreSettings={setRestoreSettings}
-                setRestoreToken={setRestoreToken}
-                setRestorePlaylists={setRestorePlaylists}
-                setRestoreTeamMembers={setRestoreTeamMembers}
-                setRestoreTeamScope={setRestoreTeamScope}
-                setRestoreScopeMode={setRestoreScopeMode}
-                setRestoreSelectedListId={setRestoreSelectedListId}
-                handleSaveSettings={handleSaveSettings}
-                saving={saving}
-                data={data}
-                formatDate={formatDate}
-                formatFileSize={formatFileSize}
-              />
-            )}
+                {activeTab === 'traffic' && (
+                  <TrafficTab
+                    form={form}
+                    setForm={setForm}
+                    displayedPlaylists={displayedPlaylists}
+                    playlistSettings={playlistSettings}
+                    savingPlaylistId={savingPlaylistId}
+                    savingTimeout={savingTimeout}
+                    saving={saving}
+                    handleBulkSetTracking={handleBulkSetTracking}
+                    handleSaveGlobalTimeout={handleSaveGlobalTimeout}
+                    handleTogglePlaylistSwitch={handleTogglePlaylistSwitch}
+                    handleUpdatePlaylistField={handleUpdatePlaylistField}
+                    handleSavePlaylistTracking={handleSavePlaylistTracking}
+                    handleSaveSettings={handleSaveSettings}
+                    searchFilter={searchFilter}
+                  />
+                )}
 
-            {activeTab === 'diagnostics' && (
-              <DiagnosticsTab notify={notify} />
+                {activeTab === 'cache' && (
+                  <CacheTab
+                    form={form}
+                    setForm={setForm}
+                    cacheStatus={data?.cache_status}
+                    clearingCacheScope={clearingCacheScope}
+                    handleClearCache={handleClearCache}
+                    handleSaveSettings={handleSaveSettings}
+                    saving={saving}
+                    searchFilter={searchFilter}
+                  />
+                )}
+
+                {activeTab === 'portal' && (
+                  <PortalTab
+                    form={form}
+                    setForm={setForm}
+                    playlists={playlists}
+                    handleSaveSettings={handleSaveSettings}
+                    saving={saving}
+                    notify={notify}
+                  />
+                )}
+
+                {activeTab === 'backups' && (
+                  <BackupTab
+                    form={form}
+                    setForm={setForm}
+                    bStatus={bStatus}
+                    backups={backups}
+                    backupScope={backupScope}
+                    setBackupScope={setBackupScope}
+                    backupPlaylistId={backupPlaylistId}
+                    setBackupPlaylistId={setBackupPlaylistId}
+                    backupIncludeToken={backupIncludeToken}
+                    setBackupIncludeToken={setBackupIncludeToken}
+                    displayedPlaylists={displayedPlaylists}
+                    actionLoading={actionLoading}
+                    handleTriggerBackup={handleTriggerBackup}
+                    handleDownloadDirectBackup={handleDownloadDirectBackup}
+                    handleDeleteBackup={handleDeleteBackup}
+                    handleFileSelectForRestore={handleFileSelectForRestore}
+                    setRestoreTarget={setRestoreTarget}
+                    setRestoreMode={setRestoreMode}
+                    setRestoreResult={setRestoreResult}
+                    setRestoreUsers={setRestoreUsers}
+                    setRestoreSettings={setRestoreSettings}
+                    setRestoreToken={setRestoreToken}
+                    setRestorePlaylists={setRestorePlaylists}
+                    setRestoreTeamMembers={setRestoreTeamMembers}
+                    setRestoreTeamScope={setRestoreTeamScope}
+                    setRestoreScopeMode={setRestoreScopeMode}
+                    setRestoreSelectedListId={setRestoreSelectedListId}
+                    handleSaveSettings={handleSaveSettings}
+                    saving={saving}
+                    data={data}
+                    formatDate={formatDate}
+                    formatFileSize={formatFileSize}
+                    searchFilter={searchFilter}
+                  />
+                )}
+
+                {activeTab === 'diagnostics' && (
+                  <DiagnosticsTab notify={notify} searchFilter={searchFilter} />
+                )}
+              </>
             )}
           </main>
         </div>

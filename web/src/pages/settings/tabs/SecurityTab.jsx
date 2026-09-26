@@ -13,6 +13,7 @@ import {
 import { Switch, Button } from '../../../components/ui';
 import { securityApi } from '../../../api/client';
 import CaptchaSettingsSection from '../components/CaptchaSettingsSection';
+import { isSectionMatching } from '../constants/settingsSearchIndex';
 
 export default function SecurityTab({
   form,
@@ -23,6 +24,7 @@ export default function SecurityTab({
   handleSaveSettings,
   saving = false,
   onOpenSecurityCenter,
+  searchFilter = '',
 }) {
   const [sslDomains, setSslDomains] = React.useState([]);
 
@@ -33,11 +35,19 @@ export default function SecurityTab({
       .catch((err) => console.error('Failed to load SSL domains', err));
   }, []);
 
+  const showBruteForceSection =
+    isSectionMatching('security-bruteforce', searchFilter) ||
+    isSectionMatching('security-multi-ip', searchFilter);
+  const showCaptchaSection = isSectionMatching('security-captcha', searchFilter);
+  const showHostnameSection = isSectionMatching('security-hostname', searchFilter);
+  const showSslSection = isSectionMatching('security-ssl', searchFilter);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
       {/* ========================================================= */}
       {/* ANTI-BRUTE FORCE & IP SECURITY SECTION                    */}
       {/* ========================================================= */}
+      {showBruteForceSection && (
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-4 shadow-argon dark:shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-3">
           <div className="flex items-center gap-2.5">
@@ -241,23 +251,27 @@ export default function SecurityTab({
           </button>
         </div>
       </div>
+      )}
 
       {/* ========================================================= */}
       {/* CAPTCHA & ANTI-BOT PROTECTION SECTION                     */}
       {/* ========================================================= */}
-      <CaptchaSettingsSection
-        form={form}
-        setForm={setForm}
-        cleanForm={cleanForm}
-        captchaVerified={captchaVerified}
-        setCaptchaVerified={setCaptchaVerified}
-        handleSaveSettings={handleSaveSettings}
-        saving={saving}
-      />
+      {showCaptchaSection && (
+        <CaptchaSettingsSection
+          form={form}
+          setForm={setForm}
+          cleanForm={cleanForm}
+          captchaVerified={captchaVerified}
+          setCaptchaVerified={setCaptchaVerified}
+          handleSaveSettings={handleSaveSettings}
+          saving={saving}
+        />
+      )}
 
       {/* ========================================================= */}
       {/* DOMAIN & HOSTNAME ACCESS ISOLATION SECTION               */}
       {/* ========================================================= */}
+      {showHostnameSection && (
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-5 shadow-argon dark:shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#e9ecef] dark:border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -379,10 +393,12 @@ export default function SecurityTab({
           </button>
         </div>
       </div>
+      )}
 
       {/* ========================================================= */}
       {/* SSL / HTTPS & CUSTOM DOMAINS                              */}
       {/* ========================================================= */}
+      {showSslSection && (
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-4 shadow-argon dark:shadow-2xl">
         <div className="flex flex-wrap items-center justify-between gap-3 pb-3 border-b border-[#e9ecef] dark:border-slate-800">
           <div className="flex items-center gap-2.5">
@@ -475,6 +491,7 @@ export default function SecurityTab({
           </button>
         </div>
       </div>
+      )}
     </div>
   );
 }
