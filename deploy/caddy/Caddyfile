@@ -3,20 +3,19 @@
 	admin off
 	auto_https disable_redirects
 	on_demand_tls {
-		ask {
-			$ASK_DOMAIN_ENDPOINT: http://dashboard:8080/api/caddy/check-domain}
+		ask {$ASK_DOMAIN_ENDPOINT:http://dashboard:8080/api/caddy/check-domain}
 	}
-	}
+}
 
 # Shared ingress routing rules for both primary domain and custom CNAME domains
-		(ingress_routes) {
+(ingress_routes) {
 	# Enable gzip and zstd compression by default for all text, json, xml, and IPTV playlist formats
 	encode {
 		gzip 5
-			zstd
+		zstd
 		minimum_length 256
 		match {
-			header Content - Type text/*
+			header Content-Type text/*
 			header Content-Type application/json*
 			header Content-Type application/javascript*
 			header Content-Type application/xml*
