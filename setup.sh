@@ -316,6 +316,13 @@ IS_UPGRADE=0
 CURRENT_VERSION="latest"
 CURRENT_DOMAIN="localhost"
 CURRENT_PORT="80"
+CADDY_WAS_RUNNING=0
+
+if command -v docker &> /dev/null; then
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^playlistlabs-caddy$"; then
+        CADDY_WAS_RUNNING=1
+    fi
+fi
 
 if [ -f .env ] && [ -f docker-compose.yml ] && [ -f secrets/db_password.txt ]; then
     IS_UPGRADE=1
@@ -343,8 +350,11 @@ curl -fsSL "${REPO_RAW_URL}/sql/001_init_schema.sql" -o sql/001_init_schema.sql
 mkdir -p deploy/caddy
 curl -fsSL "${REPO_RAW_URL}/deploy/caddy/Caddyfile" -o deploy/caddy/Caddyfile
 curl -fsSL "${REPO_RAW_URL}/deploy/caddy/1x1.png" -o deploy/caddy/1x1.png
+chmod -R 755 deploy 2>/dev/null || true
+chmod 644 deploy/caddy/* 2>/dev/null || true
 
 # Download helper scripts
+curl -fsSL "${REPO_RAW_URL}/install.sh" -o install.sh && chmod +x install.sh || true
 curl -fsSL "${REPO_RAW_URL}/reset-password.sh" -o reset-password.sh && chmod +x reset-password.sh || true
 curl -fsSL "${REPO_RAW_URL}/uninstall.sh" -o uninstall.sh && chmod +x uninstall.sh || true
 ln -sf reset-password.sh reset_password 2>/dev/null || cp reset-password.sh reset_password 2>/dev/null || true
@@ -727,6 +737,15 @@ chmod 644 secrets/*.txt 2>/dev/null || true
 
 echo -e "  Launching services..."
 docker compose up -d
+
+# Restart Caddy reverse proxy on upgrade or if previously running, so updated Caddyfile / proxy configurations take effect
+if [ "$IS_UPGRADE" -eq 1 ] || [ "$CADDY_WAS_RUNNING" -eq 1 ]; then
+    if docker ps --format '{{.Names}}' 2>/dev/null | grep -q "^playlistlabs-caddy$"; then
+        echo -e "  Restarting Caddy reverse proxy to apply configuration updates..."
+        docker compose restart caddy 2>/dev/null || docker compose --profile caddy restart caddy 2>/dev/null || docker restart playlistlabs-caddy 2>/dev/null || true
+        echo -e "  ${GREEN}✓ Caddy reverse proxy restarted successfully.${NC}"
+    fi
+fi
 
 # Read effective port & domain from .env
 EFFECTIVE_PORT=$(grep "^HTTP_PORT=" .env | cut -d'=' -f2 || echo "80")
