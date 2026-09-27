@@ -82,13 +82,7 @@ func (h *CaddyHandler) CheckCaddyDomain(w http.ResponseWriter, r *http.Request) 
 	// 4. Check Playlist CNAMEs
 	// If an admin explicitly enabled SSL (cname_ssl = 1) on a playlist, authorize it for certificates.
 	// Strip known subdomains (stb., player., web.) to find base CNAME
-	baseDomain := cleanDomain
-	for _, prefix := range []string{"stb.", "player.", "web."} {
-		if strings.HasPrefix(cleanDomain, prefix) {
-			baseDomain = strings.TrimPrefix(cleanDomain, prefix)
-			break
-		}
-	}
+	baseDomain := util.CleanBaseHost(cleanDomain)
 
 	if h.db != nil {
 		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)

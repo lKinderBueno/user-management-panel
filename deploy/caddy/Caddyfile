@@ -2,6 +2,13 @@
 	# Global options
 	admin off
 	auto_https disable_redirects
+	servers {
+		trusted_proxies static \
+		127.0.0.1/8 ::1 10.0.0.0/8 172.16.0.0/12 192.168.0.0/16 \
+		173.245.48.0/20 103.21.244.0/22 103.22.200.0/22 103.31.4.0/22 141.101.64.0/18 108.162.192.0/18 190.93.240.0/20 188.114.96.0/20 197.234.240.0/22 198.41.128.0/17 162.158.0.0/15 104.16.0.0/13 104.24.0.0/14 172.64.0.0/13 131.0.72.0/22 \
+		2400:cb00::/32 2606:4700::/32 2803:f800::/32 2405:b500::/32 2405:8100::/32 2a06:98c0::/29 2c0f:f248::/32 \
+		10.20.30.40 139.99.195.10 108.181.68.167 185.141.63.105 82.118.234.58 51.38.52.15 206.189.131.214 95.141.36.107 45.15.23.22 139.99.43.35 102.69.156.28 89.38.226.90 82.118.227.12 206.189.21.107 82.118.17.203 138.197.124.132 37.120.216.206 205.185.126.190 46.101.135.71
+	}
 	on_demand_tls {
 		ask {$ASK_DOMAIN_ENDPOINT:http://dashboard:8080/api/caddy/check-domain}
 	}
@@ -46,23 +53,15 @@
 		file_server
 	}
 
-	# 1. STB / MAG Portal (stb.*): auto-rewrite login paths and proxy static assets to stb.playlistlabs.watch
+	# 1. STB / MAG Portal (stb.*): auto-rewrite login paths
 	@stb_auth {
 		header_regexp Host (?i)^stb\..+
+		not path /stalker* /api/*
 		path_regexp stb_auth ^/([a-zA-Z0-9_\.\-]+)/([a-zA-Z0-9_\.\-]+)/?$
 	}
 	redir @stb_auth /index.html?username={re.stb_auth.1}_password={re.stb_auth.2}_force_url=1 302
 
-	@stb_portal {
-		header_regexp Host (?i)^stb\..+
-	}
-	handle @stb_portal {
-		reverse_proxy http://stb.playlistlabs.watch {
-			header_up Host stb.playlistlabs.watch
-		}
-	}
-
-	# 2. Web Player (web.* or player.*): proxy webplayer assets to web.playlistlabs.watch
+	# 2. Web Player (web.* or player.*): auto-append force_url flag on root
 	@web_root_empty {
 		header_regexp Host (?i)^(?:web|player)\..+
 		path /
@@ -78,6 +77,39 @@
 	}
 	redir @web_root_query /?{query}&force_url=1 302
 
+	# 3. Stream Redirector: matches stream playback routes or timeshift.php across all domains
+	# Matches: /(live/)?{username}/{password}/{id}, /{type}/{username}/{password}/{id}, or timeshift.php
+	@redirector {
+		not path /api/* /assets/* /static/* /docs/* /users/* /playlists/* /portal-branding/* /info/* /dashboard/* /user-management/* /team/* /collaborators/* /subadmins/* /tokens/* /api-tokens/* /security/* /settings/* /portal/*
+		path_regexp redirector (?i)(?:^/(?:(?:live|movie|series|timeshift|vods|play)/)?[^/]+/[^/]+/[0-9]+(?:\.[a-z0-9]+)?/?$|timeshift\.php)
+	}
+	handle @redirector {
+		reverse_proxy {$REDIRECTOR_UPSTREAM:redirector:3100} {
+			header_up X-Real-IP {client_ip}
+		}
+	}
+
+	# 4. Xtream Codes API, Stalker Portal & M3U/XMLTV generator (including on stb.* for MAG/STB middleware)
+	@xtream {
+		path /player_api.php* /panel_api.php* /my_player* /stalker* /get.php* /xmltv.php* /sub/* /api/user-dashboard/config*
+	}
+	handle @xtream {
+		reverse_proxy {$XTREAM_UPSTREAM:xtream:8000} {
+			header_up X-Real-IP {client_ip}
+		}
+	}
+
+	# 5. STB / MAG Portal (stb.*): proxy static frontend assets to stb.playlistlabs.watch
+	@stb_portal {
+		header_regexp Host (?i)^stb\..+
+	}
+	handle @stb_portal {
+		reverse_proxy http://stb.playlistlabs.watch {
+			header_up Host stb.playlistlabs.watch
+		}
+	}
+
+	# 6. Web Player (web.* or player.*): proxy static webplayer assets to web.playlistlabs.watch
 	@web_player {
 		header_regexp Host (?i)^(?:web|player)\..+
 	}
@@ -87,29 +119,11 @@
 		}
 	}
 
-	# 3. Stream Redirector: matches stream playback routes or timeshift.php
-	# Matches: /(live/)?{username}/{password}/{id}, /{type}/{username}/{password}/{id}, or timeshift.php
-	@redirector {
-		not header_regexp Host (?i)^(?:stb|web|player)\..+
-		not path /api/* /assets/* /static/* /docs/* /users/* /playlists/* /portal-branding/* /info/* /dashboard/* /user-management/* /team/* /collaborators/* /subadmins/* /tokens/* /api-tokens/* /security/* /settings/* /portal/*
-		path_regexp redirector (?i)(?:^/(?:(?:live|movie|series|timeshift|vods|play)/)?[^/]+/[^/]+/[0-9]+(?:\.[a-z0-9]+)?/?$|timeshift\.php)
-	}
-	handle @redirector {
-		reverse_proxy {$REDIRECTOR_UPSTREAM:redirector:3100}
-	}
-
-	# 4. Xtream Codes API, Stalker Portal & M3U/XMLTV generator
-	@xtream {
-		not header_regexp Host (?i)^(?:stb|web|player)\..+
-		path /player_api.php* /panel_api.php* /my_player* /stalker* /get.php* /xmltv.php* /api/user-dashboard/config*
-	}
-	handle @xtream {
-		reverse_proxy {$XTREAM_UPSTREAM:xtream:8000}
-	}
-
-	# 5. Default: Dashboard UI (React SPA) and Management API (/api/*)
+	# 7. Default: Dashboard UI (React SPA) and Management API (/api/*)
 	handle {
-		reverse_proxy {$DASHBOARD_UPSTREAM:dashboard:8080}
+		reverse_proxy {$DASHBOARD_UPSTREAM:dashboard:8080} {
+			header_up X-Real-IP {client_ip}
+		}
 	}
 }
 

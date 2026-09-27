@@ -174,14 +174,27 @@ func PrimaryHost(raw string) string {
 	return ""
 }
 
+// CleanBaseHost removes known streaming player/portal subdomains ("stb.", "player.", "web.") from a host.
+func CleanBaseHost(host string) string {
+	clean := NormalizeHost(host)
+	for _, prefix := range []string{"stb.", "player.", "web."} {
+		if strings.HasPrefix(clean, prefix) {
+			return strings.TrimPrefix(clean, prefix)
+		}
+	}
+	return clean
+}
+
 // HostMatchesList returns true if targetHost matches any host in the raw host list.
+// It also checks matching after stripping known subdomains (stb., player., web.).
 func HostMatchesList(targetHost, rawList string) bool {
 	target := NormalizeHost(targetHost)
 	if target == "" {
 		return false
 	}
+	baseTarget := CleanBaseHost(target)
 	for _, h := range NormalizeHostList(rawList) {
-		if h == target {
+		if h == target || CleanBaseHost(h) == baseTarget {
 			return true
 		}
 	}
@@ -198,6 +211,7 @@ func ValidateCnameAccess(ctx context.Context, db *sql.DB, userListID uint64, use
 	if cleanReqHost == "" {
 		return !userEnforceCname, nil
 	}
+	baseReqHost := CleanBaseHost(cleanReqHost)
 
 	var userHosts []string
 	if userCname != nil {
@@ -206,7 +220,7 @@ func ValidateCnameAccess(ctx context.Context, db *sql.DB, userListID uint64, use
 
 	userMatches := false
 	for _, h := range userHosts {
-		if h == cleanReqHost {
+		if h == cleanReqHost || CleanBaseHost(h) == baseReqHost {
 			userMatches = true
 			break
 		}
@@ -243,7 +257,7 @@ func ValidateCnameAccess(ctx context.Context, db *sql.DB, userListID uint64, use
 		if err := rows.Scan(&otherID, &otherCname, &otherEnforce); err != nil {
 			continue
 		}
-		if HostMatchesList(cleanReqHost, otherCname) {
+		if HostMatchesList(cleanReqHost, otherCname) || HostMatchesList(baseReqHost, otherCname) {
 			if otherEnforce == 1 || userEnforceCname {
 				return false, nil
 			}
