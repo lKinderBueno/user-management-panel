@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
@@ -343,7 +344,7 @@ func (s *Scheduler) TriggerBackupScoped(ctx context.Context, listID *uint64, bac
 		PlaylistName:   payload.PlaylistName,
 		HasSettings:    payload.SystemSettings != nil,
 		HasPlaylists:   len(payload.Playlists) > 0,
-		HasToken:       payload.SystemSettings != nil && (payload.SystemSettings.HasToken || payload.SystemSettings.IPTVEditorAPIToken != ""),
+		HasToken:       payload.SystemSettings != nil && (strings.TrimSpace(payload.SystemSettings.IPTVEditorAPIToken) != "" || strings.TrimSpace(payload.SystemSettings.TMDBApiKey) != ""),
 		HasTeamMembers: len(payload.TeamMembers) > 0,
 		TotalTeam:      len(payload.TeamMembers),
 	}, nil

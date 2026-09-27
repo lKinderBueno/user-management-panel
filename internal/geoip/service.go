@@ -93,7 +93,7 @@ func (s *Service) Lookup(ctx context.Context, rawIP string) (*Location, error) {
 		}, nil
 	}
 
-	cacheKey := fmt.Sprintf("geoip:%s", cleanIP)
+	cacheKey := fmt.Sprintf("cache:geoip:%s", cleanIP)
 
 	// 1. Check Redis cache if available
 	if s.cache != nil && s.cache.IsAvailable() && s.cache.IsEnabled() {

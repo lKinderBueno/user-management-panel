@@ -85,6 +85,9 @@ func (r *SecurityRepo) EnsureSchema(ctx context.Context) error {
 		`ALTER TABLE managed_users ADD COLUMN IF NOT EXISTS is_compromised TINYINT(1) NOT NULL DEFAULT 0`,
 		`ALTER TABLE managed_users ADD COLUMN IF NOT EXISTS compromised_reason VARCHAR(255) NULL`,
 		`ALTER TABLE managed_users ADD COLUMN IF NOT EXISTS compromised_at DATETIME NULL`,
+
+		`UPDATE security_ip_bans SET failed_attempts = 1 WHERE is_blocked = 1 AND failed_attempts = 0`,
+		`DELETE FROM security_ip_bans WHERE is_blocked = 0 AND failed_attempts = 0`,
 	}
 
 	for _, q := range queries {
@@ -126,7 +129,7 @@ func (r *SecurityRepo) GetActiveBlockedIPs(ctx context.Context) (map[string]time
 
 // GetTrackedIPs lists tracked IPs with search, filtering and pagination.
 func (r *SecurityRepo) GetTrackedIPs(ctx context.Context, search, statusFilter string, limit, offset int) ([]models.TrackedIP, int, error) {
-	where := []string{"1=1"}
+	where := []string{"failed_attempts > 0"}
 	var args []interface{}
 
 	if search != "" {
@@ -352,9 +355,10 @@ func (r *SecurityRepo) BlockIP(ctx context.Context, ip, reason string, durationH
 
 	query := `INSERT INTO security_ip_bans 
 		(ip, failed_attempts, is_blocked, blocked_reason, blocked_at, expires_at, last_attempt_at, created_at) 
-		VALUES (?, 0, 1, ?, ?, ?, ?, ?) 
+		VALUES (?, 1, 1, ?, ?, ?, ?, ?) 
 		ON DUPLICATE KEY UPDATE 
 			is_blocked = 1, 
+			failed_attempts = CASE WHEN failed_attempts <= 0 THEN 1 ELSE failed_attempts END,
 			blocked_reason = VALUES(blocked_reason), 
 			blocked_at = VALUES(blocked_at), 
 			expires_at = VALUES(expires_at), 
@@ -464,7 +468,7 @@ func (r *SecurityRepo) GetStats(ctx context.Context) (*models.SecurityStats, err
 	_ = r.db.QueryRowContext(ctx, queryBlocked, now).Scan(&stats.TotalBlocked)
 
 	// Total tracked
-	queryTracked := `SELECT COUNT(*) FROM security_ip_bans`
+	queryTracked := `SELECT COUNT(*) FROM security_ip_bans WHERE failed_attempts > 0`
 	_ = r.db.QueryRowContext(ctx, queryTracked).Scan(&stats.TotalTracked)
 
 	// Attempts in last 24h

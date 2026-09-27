@@ -272,16 +272,26 @@ func (r *RedisCache) deleteWithCount(ctx context.Context, prefix string) (int64,
 	return totalDeleted, nil
 }
 
+func (r *RedisCache) countCacheKeys(ctx context.Context) int64 {
+	if r == nil || r.client == nil {
+		return 0
+	}
+
+	var count int64
+	iter := r.client.Scan(ctx, 0, "cache:*", 500).Iterator()
+	for iter.Next(ctx) {
+		count++
+	}
+	return count
+}
+
 func (r *RedisCache) GetStats(ctx context.Context) (keysCount int64, memUsed string, uptime string, err error) {
 	if r == nil || r.client == nil {
 		return 0, "N/A", "N/A", nil
 	}
 
-	// 1. Total keys count in active DB
-	dbSize, err := r.client.DBSize(ctx).Result()
-	if err != nil {
-		dbSize = 0
-	}
+	// 1. Total cache keys count in active DB (keys matching "cache:*")
+	keysCount = r.countCacheKeys(ctx)
 
 	// 2. Memory Info
 	memInfo, err := r.client.Info(ctx, "memory").Result()
@@ -308,7 +318,7 @@ func (r *RedisCache) GetStats(ctx context.Context) (keysCount int64, memUsed str
 		}
 	}
 
-	return dbSize, memUsed, uptime, nil
+	return keysCount, memUsed, uptime, nil
 }
 
 func (r *RedisCache) Flush(ctx context.Context, scope string) (int64, error) {
@@ -324,6 +334,8 @@ func (r *RedisCache) Flush(ctx context.Context, scope string) (int64, error) {
 		prefix = "cache:cat:"
 	case "streams", "stream":
 		prefix = "cache:stream:"
+	case "geoip":
+		prefix = "cache:geoip:"
 	default:
 		// Flush all cache keys (all keys starting with "cache:")
 		prefix = "cache:"

@@ -221,7 +221,7 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
     try {
       const [settingsRes, backupsRes, playlistsRes] = await Promise.all([
         settingsApi.getSettings(),
-        settingsApi.getBackups(),
+        settingsApi.getBackups().catch(() => []),
         playlistApi.getPlaylists().catch(() => null),
       ]);
 
@@ -482,7 +482,13 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
     try {
       const res = await settingsApi.clearCache(scope);
       notify(res.message || `Cache '${scope}' cleared successfully!`, 'success');
-      loadAll(true, false);
+      if (res.cache_status) {
+        setData((prev) => ({
+          ...prev,
+          cache_status: res.cache_status,
+        }));
+      }
+      await loadAll(true, false);
     } catch (err) {
       notify(err.message || 'Error clearing cache', 'error');
     } finally {
@@ -699,7 +705,10 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
         loadedPlaylists = payload.playlists || [];
         settings = payload.system_settings || null;
         teamMembers = payload.team_members || [];
-        hasToken = Boolean(payload.system_settings?.iptveditor_api_token || payload.system_settings?.has_token);
+        hasToken = Boolean(
+          (payload.system_settings?.iptveditor_api_token && String(payload.system_settings.iptveditor_api_token).trim() !== '') ||
+          (payload.system_settings?.tmdb_api_key && String(payload.system_settings.tmdb_api_key).trim() !== '')
+        );
         bType = payload.backup_type || (settings ? 'full' : 'users');
         pName = payload.playlist_name || null;
         pId = payload.playlist_id != null ? String(payload.playlist_id).trim() : null;

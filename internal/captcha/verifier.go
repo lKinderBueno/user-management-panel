@@ -4,6 +4,7 @@ import (
 	"context"
 	"encoding/json"
 	"fmt"
+	"net"
 	"net/http"
 	"net/url"
 	"strings"
@@ -15,10 +16,53 @@ var httpClient = &http.Client{
 }
 
 type verifyResponse struct {
-	Success     bool     `json:"success"`
-	ErrorCodes  []string `json:"error-codes"`
-	Score       float64  `json:"score,omitempty"`
-	Action      string   `json:"action,omitempty"`
+	Success    bool     `json:"success"`
+	ErrorCodes []string `json:"error-codes"`
+	Score      float64  `json:"score,omitempty"`
+	Action     string   `json:"action,omitempty"`
+	Messages   []string `json:"messages,omitempty"`
+}
+
+// isPublicIP checks whether the string is a valid, globally routable public IP.
+// Private (RFC 1918), loopback (127.0.0.1, ::1), unspecified, and link-local addresses are rejected.
+func isPublicIP(ipStr string) bool {
+	ipStr = strings.TrimSpace(ipStr)
+	if ipStr == "" {
+		return false
+	}
+	ip := net.ParseIP(ipStr)
+	if ip == nil {
+		return false
+	}
+	return !ip.IsLoopback() && !ip.IsPrivate() && !ip.IsUnspecified() && !ip.IsLinkLocalUnicast() && !ip.IsLinkLocalMulticast()
+}
+
+func formatProviderErrorCodes(codes []string) string {
+	if len(codes) == 0 {
+		return "verification rejected by provider"
+	}
+	var details []string
+	for _, code := range codes {
+		switch code {
+		case "invalid-input-secret":
+			details = append(details, "invalid secret key (invalid-input-secret)")
+		case "missing-input-secret":
+			details = append(details, "missing secret key (missing-input-secret)")
+		case "invalid-input-response":
+			details = append(details, "invalid, expired, or rejected captcha token (invalid-input-response)")
+		case "missing-input-response":
+			details = append(details, "missing captcha token (missing-input-response)")
+		case "timeout-or-duplicate":
+			details = append(details, "captcha token already used or expired (timeout-or-duplicate)")
+		case "bad-request":
+			details = append(details, "bad request (bad-request)")
+		case "internal-error":
+			details = append(details, "provider internal error (internal-error)")
+		default:
+			details = append(details, code)
+		}
+	}
+	return strings.Join(details, "; ")
 }
 
 // VerifyWithProvider checks whether the provided response/solution is valid according to the configured provider.
@@ -26,7 +70,11 @@ type verifyResponse struct {
 // For external providers (turnstile, recaptcha_v2, recaptcha_v3, hcaptcha), solution is the client-side token,
 // and secretKey is the private key configured by the administrator.
 func VerifyWithProvider(ctx context.Context, provider, secretKey, id, solution, clientIP string) (bool, error) {
-	switch strings.ToLower(strings.TrimSpace(provider)) {
+	provider = strings.ToLower(strings.TrimSpace(provider))
+	secretKey = strings.TrimSpace(secretKey)
+	solution = strings.TrimSpace(solution)
+
+	switch provider {
 	case "disabled":
 		return true, nil
 
@@ -55,9 +103,9 @@ func verifyCloudflareTurnstile(ctx context.Context, secretKey, response, remoteI
 	data := url.Values{}
 	data.Set("secret", secretKey)
 	data.Set("response", response)
-	if remoteIP != "" {
-		data.Set("remoteip", remoteIP)
-	}
+	// Cloudflare Turnstile: remoteip is optional.
+	// We omit remoteip to avoid false rejections due to localhost/LAN testing, proxies, or IPv4/IPv6 dual-stack mismatches.
+	// If remoteip is explicitly needed and public, it can be passed, but omitting avoids false positives.
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://challenges.cloudflare.com/turnstile/v0/siteverify", strings.NewReader(data.Encode()))
 	if err != nil {
@@ -76,7 +124,11 @@ func verifyCloudflareTurnstile(ctx context.Context, secretKey, response, remoteI
 		return false, fmt.Errorf("failed to parse turnstile response: %w", err)
 	}
 
-	return result.Success, nil
+	if !result.Success {
+		return false, fmt.Errorf("%s", formatProviderErrorCodes(result.ErrorCodes))
+	}
+
+	return true, nil
 }
 
 func verifyGoogleRecaptcha(ctx context.Context, secretKey, response, remoteIP string) (bool, error) {
@@ -87,8 +139,8 @@ func verifyGoogleRecaptcha(ctx context.Context, secretKey, response, remoteIP st
 	data := url.Values{}
 	data.Set("secret", secretKey)
 	data.Set("response", response)
-	if remoteIP != "" {
-		data.Set("remoteip", remoteIP)
+	if isPublicIP(remoteIP) {
+		data.Set("remoteip", strings.TrimSpace(remoteIP))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://www.google.com/recaptcha/api/siteverify", strings.NewReader(data.Encode()))
@@ -108,7 +160,11 @@ func verifyGoogleRecaptcha(ctx context.Context, secretKey, response, remoteIP st
 		return false, fmt.Errorf("failed to parse recaptcha response: %w", err)
 	}
 
-	return result.Success, nil
+	if !result.Success {
+		return false, fmt.Errorf("%s", formatProviderErrorCodes(result.ErrorCodes))
+	}
+
+	return true, nil
 }
 
 func verifyHCaptcha(ctx context.Context, secretKey, response, remoteIP string) (bool, error) {
@@ -119,8 +175,8 @@ func verifyHCaptcha(ctx context.Context, secretKey, response, remoteIP string) (
 	data := url.Values{}
 	data.Set("secret", secretKey)
 	data.Set("response", response)
-	if remoteIP != "" {
-		data.Set("remoteip", remoteIP)
+	if isPublicIP(remoteIP) {
+		data.Set("remoteip", strings.TrimSpace(remoteIP))
 	}
 
 	req, err := http.NewRequestWithContext(ctx, http.MethodPost, "https://hcaptcha.com/siteverify", strings.NewReader(data.Encode()))
@@ -140,5 +196,9 @@ func verifyHCaptcha(ctx context.Context, secretKey, response, remoteIP string) (
 		return false, fmt.Errorf("failed to parse hcaptcha response: %w", err)
 	}
 
-	return result.Success, nil
+	if !result.Success {
+		return false, fmt.Errorf("%s", formatProviderErrorCodes(result.ErrorCodes))
+	}
+
+	return true, nil
 }

@@ -37,9 +37,39 @@ type SystemSettingsBackup struct {
 	ThrottleStalkerEnabled       bool `json:"throttle_stalker_enabled"`
 	ThrottleStalkerLimit         int  `json:"throttle_stalker_limit"`
 	ThrottleStalkerWindowSeconds int  `json:"throttle_stalker_window_seconds"`
+	// Portal Studio & Branding (Global & Login)
+	UserDashboardEnabled             bool   `json:"user_dashboard_enabled"`
+	UserDashboardTitle               string `json:"user_dashboard_title,omitempty"`
+	UserDashboardAllowHideCategories bool   `json:"user_dashboard_allow_hide_categories"`
+	UserDashboardHTML                string `json:"user_dashboard_html,omitempty"`
+	UserDashboardLogo                string `json:"user_dashboard_logo,omitempty"`
+	UserDashboardPrimaryColor        string `json:"user_dashboard_primary_color,omitempty"`
+	UserDashboardSecondaryColor      string `json:"user_dashboard_secondary_color,omitempty"`
+	UserDashboardAccentColor         string `json:"user_dashboard_accent_color,omitempty"`
+	UserDashboardBackgroundTheme     string `json:"user_dashboard_background_theme,omitempty"`
+	// Anti-Brute Force & Multi-IP Protection
+	AntiBruteForceEnabled       bool   `json:"antibruteforce_enabled"`
+	AntiBruteForceMaxAttempts   int    `json:"antibruteforce_max_attempts"`
+	AntiBruteForceWindowMinutes int    `json:"antibruteforce_window_minutes"`
+	AntiBruteForceBanHours      int    `json:"antibruteforce_ban_hours"`
+	MultiIPDetectionEnabled     bool   `json:"multi_ip_detection_enabled"`
+	MultiIPMaxSubnets           int    `json:"multi_ip_max_subnets"`
+	MultiIPWindowHours          int    `json:"multi_ip_window_hours"`
+	MultiIPAutoSuspend          bool   `json:"multi_ip_auto_suspend"`
+	CaptchaProvider             string `json:"captcha_provider,omitempty"`
+	CaptchaSiteKey              string `json:"captcha_site_key,omitempty"`
+	CaptchaSecretKey            string `json:"captcha_secret_key,omitempty"`
+	// Host & Domain Access Isolation & SSL
+	AdminHostname             string `json:"admin_hostname,omitempty"`
+	BlockStreamingOnAdminHost bool   `json:"block_streaming_on_admin_host"`
+	RestrictAdminToAdminHost  bool   `json:"restrict_admin_to_admin_host"`
+	BlockDirectIPStreaming    bool   `json:"block_direct_ip_streaming"`
+	SSLOnDemandEnabled        bool   `json:"ssl_on_demand_enabled"`
+	AdditionalSSLDomains      string `json:"additional_ssl_domains,omitempty"`
+	EPGMaxDays                int    `json:"epg_max_days"`
 }
 
-// PlaylistConfigBackup represents playlist configurations (including welcome_info).
+// PlaylistConfigBackup represents playlist configurations (including welcome_info & portal_branding).
 type PlaylistConfigBackup struct {
 	ID                     FlexUint64      `json:"id"`
 	Name                   string          `json:"name"`
@@ -52,6 +82,7 @@ type PlaylistConfigBackup struct {
 	CnameSSL               bool            `json:"cname_ssl"`
 	Patterns               json.RawMessage `json:"patterns,omitempty"`
 	WelcomeInfo            json.RawMessage `json:"welcome_info,omitempty"`
+	PortalBranding         json.RawMessage `json:"portal_branding,omitempty"`
 }
 
 // TeamMemberBackup represents an administrator or collaborator account in a backup.

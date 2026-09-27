@@ -27,6 +27,8 @@ export default function CaptchaSettingsSection({
 }) {
   const [showSecretKey, setShowSecretKey] = useState(false);
   const [testing, setTesting] = useState(false);
+  const testingRef = useRef(false);
+  const lastTestedTokenRef = useRef('');
   const [testResult, setTestResult] = useState(null); // { success: boolean, message: string }
   const [lastTestedKey, setLastTestedKey] = useState('');
   const widgetRef = useRef(null);
@@ -83,6 +85,7 @@ export default function CaptchaSettingsSection({
   // Handle Token Received from Captcha Challenge
   const handleChallengeSolved = async (token) => {
     if (!token) return;
+    if (testingRef.current || lastTestedTokenRef.current === token) return;
 
     const currentForm = formRef.current || form;
     const provider = currentForm.captcha_provider;
@@ -98,7 +101,8 @@ export default function CaptchaSettingsSection({
       return;
     }
 
-    if (testing) return;
+    testingRef.current = true;
+    lastTestedTokenRef.current = token;
     setTesting(true);
     setTestResult(null);
 
@@ -123,6 +127,7 @@ export default function CaptchaSettingsSection({
           success: false,
           message: res.message || 'Verification failed with the selected provider.',
         });
+        lastTestedTokenRef.current = '';
       }
     } catch (err) {
       setCaptchaVerified(false);
@@ -130,12 +135,16 @@ export default function CaptchaSettingsSection({
         success: false,
         message: err.message || 'Network error during verification test.',
       });
+      lastTestedTokenRef.current = '';
     } finally {
+      testingRef.current = false;
       setTesting(false);
     }
   };
 
   const handleResetTest = () => {
+    lastTestedTokenRef.current = '';
+    testingRef.current = false;
     setCaptchaVerified(false);
     setTestResult(null);
     widgetRef.current?.reset();
@@ -326,6 +335,15 @@ export default function CaptchaSettingsSection({
               >
                 Open {form.captcha_provider.replace('_', ' ').toUpperCase()} Dashboard to obtain API keys
               </a>
+            </div>
+          )}
+
+          {form.captcha_provider === 'turnstile' && (
+            <div className="text-[11px] text-slate-600 dark:text-slate-400 bg-amber-50/70 dark:bg-amber-950/20 border border-amber-200/70 dark:border-amber-900/40 rounded p-2.5 space-y-1">
+              <span className="font-semibold text-amber-800 dark:text-amber-300 block">Cloudflare Turnstile Setup Note:</span>
+              <p>
+                In your Cloudflare dashboard, ensure the hostname you use to access this panel (for example <code className="px-1 py-0.5 bg-amber-100/70 dark:bg-amber-900/40 rounded text-[11px]">localhost</code> for local development, or your public domain) is added to the <strong>Allowed Hostnames</strong> list of the widget.
+              </p>
             </div>
           )}
 

@@ -509,6 +509,11 @@ export default function SecurityManagement() {
     });
   }, [compromisedIncidents, debouncedCompromisedSearch, compromisedStatusFilter]);
 
+  // Hide IPs with 0 failed attempts
+  const displayTrackedIPs = React.useMemo(() => {
+    return (trackedIPs || []).filter((row) => (row.failed_attempts || 0) > 0);
+  }, [trackedIPs]);
+
   if (loading && !stats) {
     return (
       <div className="min-h-[70vh] flex flex-col items-center justify-center gap-3">
@@ -816,14 +821,14 @@ export default function SecurityManagement() {
                   </tr>
                 </thead>
                 <tbody className="divide-y divide-[#e9ecef] dark:divide-slate-800">
-                  {trackedIPs.length === 0 ? (
+                  {displayTrackedIPs.length === 0 ? (
                     <tr>
                       <td colSpan="7" className="px-4 py-8 text-center text-[#8898aa] dark:text-slate-400">
                         No IP addresses matching your filter criteria.
                       </td>
                     </tr>
                   ) : (
-                    trackedIPs.map((row) => (
+                    displayTrackedIPs.map((row) => (
                       <tr key={row.id} className="hover:bg-[#f8f9fe] dark:hover:bg-slate-800/50 transition">
                         <td className="px-4 py-2.5">
                           <div className="flex items-center gap-1.5">
@@ -903,7 +908,7 @@ export default function SecurityManagement() {
                               <Activity className="w-3.5 h-3.5" />
                             </button>
 
-                            {row.failed_attempts > 0 && (
+                            {!row.is_blocked && row.failed_attempts > 0 && (
                               <button
                                 type="button"
                                 onClick={() => handleReset(row.ip)}
@@ -934,7 +939,7 @@ export default function SecurityManagement() {
             {/* Pagination */}
             {totalIPs > limit && (
               <div className="p-3 border-t border-[#dee2e6] dark:border-slate-800 flex items-center justify-between text-xs text-[#8898aa] dark:text-slate-400">
-                <span>Showing {trackedIPs.length} of {totalIPs} IPs</span>
+                <span>Showing {displayTrackedIPs.length} of {totalIPs} IPs</span>
                 <div className="flex items-center gap-1">
                   <button
                     type="button"

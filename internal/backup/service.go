@@ -90,8 +90,10 @@ func (s *Service) CreateBackupPayload(ctx context.Context, listID *uint64, backu
 	if (backupType == "full" || backupType == "settings") && s.settingsRepo != nil {
 		sys, err := s.settingsRepo.Get(ctx)
 		if err == nil && sys != nil {
+			tokenIncluded := includeToken && strings.TrimSpace(sys.IPTVEditorAPIToken) != ""
+			tmdbIncluded := includeToken && strings.TrimSpace(sys.TMDBApiKey) != ""
 			sysSettingsBackup = &models.SystemSettingsBackup{
-				HasToken:                  sys.IPTVEditorAPIToken != "",
+				HasToken:                  tokenIncluded || tmdbIncluded,
 				PlaylistSyncIntervalHours: sys.PlaylistSyncIntervalHours,
 				PlaylistSyncEnabled:       sys.PlaylistSyncEnabled,
 				ExpirySyncIntervalHours:   sys.ExpirySyncIntervalHours,
@@ -108,12 +110,54 @@ func (s *Service) CreateBackupPayload(ctx context.Context, listID *uint64, backu
 				CacheCategoriesTTLMinutes: sys.CacheCategoriesTTLMinutes,
 				CacheStreamsTTLMinutes:    sys.CacheStreamsTTLMinutes,
 				TrackingTimeoutMinutes:    sys.TrackingTimeoutMinutes,
+				ThrottleEnabled:              sys.ThrottleEnabled,
+				ThrottleRouterEnabled:        sys.ThrottleRouterEnabled,
+				ThrottleRouterLimit:          sys.ThrottleRouterLimit,
+				ThrottleRouterWindowSeconds:  sys.ThrottleRouterWindowSeconds,
+				ThrottleM3UEPGEnabled:        sys.ThrottleM3UEPGEnabled,
+				ThrottleM3UEPGLimit:          sys.ThrottleM3UEPGLimit,
+				ThrottleM3UEPGWindowSeconds:  sys.ThrottleM3UEPGWindowSeconds,
+				ThrottleXtreamEnabled:        sys.ThrottleXtreamEnabled,
+				ThrottleXtreamLimit:          sys.ThrottleXtreamLimit,
+				ThrottleXtreamWindowSeconds:  sys.ThrottleXtreamWindowSeconds,
+				ThrottleStalkerEnabled:       sys.ThrottleStalkerEnabled,
+				ThrottleStalkerLimit:         sys.ThrottleStalkerLimit,
+				ThrottleStalkerWindowSeconds: sys.ThrottleStalkerWindowSeconds,
+				UserDashboardEnabled:             sys.UserDashboardEnabled,
+				UserDashboardTitle:               sys.UserDashboardTitle,
+				UserDashboardAllowHideCategories: sys.UserDashboardAllowHideCategories,
+				UserDashboardHTML:                sys.UserDashboardHTML,
+				UserDashboardLogo:                sys.UserDashboardLogo,
+				UserDashboardPrimaryColor:        sys.UserDashboardPrimaryColor,
+				UserDashboardSecondaryColor:      sys.UserDashboardSecondaryColor,
+				UserDashboardAccentColor:         sys.UserDashboardAccentColor,
+				UserDashboardBackgroundTheme:     sys.UserDashboardBackgroundTheme,
+				AntiBruteForceEnabled:       sys.AntiBruteForceEnabled,
+				AntiBruteForceMaxAttempts:   sys.AntiBruteForceMaxAttempts,
+				AntiBruteForceWindowMinutes: sys.AntiBruteForceWindowMinutes,
+				AntiBruteForceBanHours:      sys.AntiBruteForceBanHours,
+				MultiIPDetectionEnabled:     sys.MultiIPDetectionEnabled,
+				MultiIPMaxSubnets:           sys.MultiIPMaxSubnets,
+				MultiIPWindowHours:          sys.MultiIPWindowHours,
+				MultiIPAutoSuspend:          sys.MultiIPAutoSuspend,
+				CaptchaProvider:             sys.CaptchaProvider,
+				CaptchaSiteKey:              sys.CaptchaSiteKey,
+				AdminHostname:               sys.AdminHostname,
+				BlockStreamingOnAdminHost:   sys.BlockStreamingOnAdminHost,
+				RestrictAdminToAdminHost:    sys.RestrictAdminToAdminHost,
+				BlockDirectIPStreaming:      sys.BlockDirectIPStreaming,
+				SSLOnDemandEnabled:          sys.SSLOnDemandEnabled,
+				AdditionalSSLDomains:        sys.AdditionalSSLDomains,
+				EPGMaxDays:                  sys.EPGMaxDays,
 			}
-			if includeToken && sys.IPTVEditorAPIToken != "" {
+			if tokenIncluded {
 				sysSettingsBackup.IPTVEditorAPIToken = sys.IPTVEditorAPIToken
 			}
-			if includeToken && sys.TMDBApiKey != "" {
+			if tmdbIncluded {
 				sysSettingsBackup.TMDBApiKey = sys.TMDBApiKey
+			}
+			if includeToken && sys.CaptchaSecretKey != "" {
+				sysSettingsBackup.CaptchaSecretKey = sys.CaptchaSecretKey
 			}
 		}
 	}
@@ -136,6 +180,7 @@ func (s *Service) CreateBackupPayload(ctx context.Context, listID *uint64, backu
 					CnameSSL:               p.CnameSSL,
 					Patterns:               p.Patterns,
 					WelcomeInfo:            p.WelcomeInfo,
+					PortalBranding:         p.PortalBranding,
 				})
 			}
 		} else {
@@ -154,6 +199,7 @@ func (s *Service) CreateBackupPayload(ctx context.Context, listID *uint64, backu
 						CnameSSL:               p.CnameSSL,
 						Patterns:               p.Patterns,
 						WelcomeInfo:            p.WelcomeInfo,
+						PortalBranding:         p.PortalBranding,
 					})
 				}
 			}
@@ -278,7 +324,7 @@ func (s *Service) ListStoredBackups() ([]models.BackupFileMetadata, error) {
 				listName = preview.PlaylistName
 				if preview.SystemSettings != nil {
 					hasSettings = true
-					if preview.SystemSettings.HasToken || preview.SystemSettings.IPTVEditorAPIToken != "" {
+					if strings.TrimSpace(preview.SystemSettings.IPTVEditorAPIToken) != "" || strings.TrimSpace(preview.SystemSettings.TMDBApiKey) != "" {
 						hasToken = true
 					}
 				}
@@ -434,6 +480,106 @@ func (s *Service) RestoreFromPayload(ctx context.Context, payload *models.Backup
 				cur.TrackingTimeoutMinutes = payload.SystemSettings.TrackingTimeoutMinutes
 			}
 
+			// Restore portal studio / user dashboard customization if present in backup
+			if payload.SystemSettings.UserDashboardTitle != "" {
+				cur.UserDashboardTitle = payload.SystemSettings.UserDashboardTitle
+				cur.UserDashboardEnabled = payload.SystemSettings.UserDashboardEnabled
+				cur.UserDashboardAllowHideCategories = payload.SystemSettings.UserDashboardAllowHideCategories
+				if payload.SystemSettings.UserDashboardHTML != "" {
+					cur.UserDashboardHTML = payload.SystemSettings.UserDashboardHTML
+				}
+				if payload.SystemSettings.UserDashboardLogo != "" {
+					cur.UserDashboardLogo = payload.SystemSettings.UserDashboardLogo
+				}
+				if payload.SystemSettings.UserDashboardPrimaryColor != "" {
+					cur.UserDashboardPrimaryColor = payload.SystemSettings.UserDashboardPrimaryColor
+				}
+				if payload.SystemSettings.UserDashboardSecondaryColor != "" {
+					cur.UserDashboardSecondaryColor = payload.SystemSettings.UserDashboardSecondaryColor
+				}
+				if payload.SystemSettings.UserDashboardAccentColor != "" {
+					cur.UserDashboardAccentColor = payload.SystemSettings.UserDashboardAccentColor
+				}
+				if payload.SystemSettings.UserDashboardBackgroundTheme != "" {
+					cur.UserDashboardBackgroundTheme = payload.SystemSettings.UserDashboardBackgroundTheme
+				}
+			}
+
+			// Restore Throttling & Limits
+			cur.ThrottleEnabled = payload.SystemSettings.ThrottleEnabled
+			cur.ThrottleRouterEnabled = payload.SystemSettings.ThrottleRouterEnabled
+			if payload.SystemSettings.ThrottleRouterLimit > 0 {
+				cur.ThrottleRouterLimit = payload.SystemSettings.ThrottleRouterLimit
+			}
+			if payload.SystemSettings.ThrottleRouterWindowSeconds > 0 {
+				cur.ThrottleRouterWindowSeconds = payload.SystemSettings.ThrottleRouterWindowSeconds
+			}
+			cur.ThrottleM3UEPGEnabled = payload.SystemSettings.ThrottleM3UEPGEnabled
+			if payload.SystemSettings.ThrottleM3UEPGLimit > 0 {
+				cur.ThrottleM3UEPGLimit = payload.SystemSettings.ThrottleM3UEPGLimit
+			}
+			if payload.SystemSettings.ThrottleM3UEPGWindowSeconds > 0 {
+				cur.ThrottleM3UEPGWindowSeconds = payload.SystemSettings.ThrottleM3UEPGWindowSeconds
+			}
+			cur.ThrottleXtreamEnabled = payload.SystemSettings.ThrottleXtreamEnabled
+			if payload.SystemSettings.ThrottleXtreamLimit > 0 {
+				cur.ThrottleXtreamLimit = payload.SystemSettings.ThrottleXtreamLimit
+			}
+			if payload.SystemSettings.ThrottleXtreamWindowSeconds > 0 {
+				cur.ThrottleXtreamWindowSeconds = payload.SystemSettings.ThrottleXtreamWindowSeconds
+			}
+			cur.ThrottleStalkerEnabled = payload.SystemSettings.ThrottleStalkerEnabled
+			if payload.SystemSettings.ThrottleStalkerLimit > 0 {
+				cur.ThrottleStalkerLimit = payload.SystemSettings.ThrottleStalkerLimit
+			}
+			if payload.SystemSettings.ThrottleStalkerWindowSeconds > 0 {
+				cur.ThrottleStalkerWindowSeconds = payload.SystemSettings.ThrottleStalkerWindowSeconds
+			}
+
+			// Restore Anti-Brute Force & Multi-IP Protection
+			cur.AntiBruteForceEnabled = payload.SystemSettings.AntiBruteForceEnabled
+			if payload.SystemSettings.AntiBruteForceMaxAttempts > 0 {
+				cur.AntiBruteForceMaxAttempts = payload.SystemSettings.AntiBruteForceMaxAttempts
+			}
+			if payload.SystemSettings.AntiBruteForceWindowMinutes > 0 {
+				cur.AntiBruteForceWindowMinutes = payload.SystemSettings.AntiBruteForceWindowMinutes
+			}
+			if payload.SystemSettings.AntiBruteForceBanHours > 0 {
+				cur.AntiBruteForceBanHours = payload.SystemSettings.AntiBruteForceBanHours
+			}
+			cur.MultiIPDetectionEnabled = payload.SystemSettings.MultiIPDetectionEnabled
+			if payload.SystemSettings.MultiIPMaxSubnets > 0 {
+				cur.MultiIPMaxSubnets = payload.SystemSettings.MultiIPMaxSubnets
+			}
+			if payload.SystemSettings.MultiIPWindowHours > 0 {
+				cur.MultiIPWindowHours = payload.SystemSettings.MultiIPWindowHours
+			}
+			cur.MultiIPAutoSuspend = payload.SystemSettings.MultiIPAutoSuspend
+			if payload.SystemSettings.CaptchaProvider != "" {
+				cur.CaptchaProvider = payload.SystemSettings.CaptchaProvider
+			}
+			if payload.SystemSettings.CaptchaSiteKey != "" {
+				cur.CaptchaSiteKey = payload.SystemSettings.CaptchaSiteKey
+			}
+			if req.RestoreToken && payload.SystemSettings.CaptchaSecretKey != "" {
+				cur.CaptchaSecretKey = payload.SystemSettings.CaptchaSecretKey
+			}
+
+			// Restore Host & Domain Access Isolation & SSL
+			if payload.SystemSettings.AdminHostname != "" {
+				cur.AdminHostname = payload.SystemSettings.AdminHostname
+			}
+			cur.BlockStreamingOnAdminHost = payload.SystemSettings.BlockStreamingOnAdminHost
+			cur.RestrictAdminToAdminHost = payload.SystemSettings.RestrictAdminToAdminHost
+			cur.BlockDirectIPStreaming = payload.SystemSettings.BlockDirectIPStreaming
+			cur.SSLOnDemandEnabled = payload.SystemSettings.SSLOnDemandEnabled
+			if payload.SystemSettings.AdditionalSSLDomains != "" {
+				cur.AdditionalSSLDomains = payload.SystemSettings.AdditionalSSLDomains
+			}
+			if payload.SystemSettings.EPGMaxDays > 0 {
+				cur.EPGMaxDays = payload.SystemSettings.EPGMaxDays
+			}
+
 			// Restore token only if explicitly requested and token is present
 			if req.RestoreToken && payload.SystemSettings.IPTVEditorAPIToken != "" {
 				cur.IPTVEditorAPIToken = payload.SystemSettings.IPTVEditorAPIToken
@@ -451,7 +597,7 @@ func (s *Service) RestoreFromPayload(ctx context.Context, payload *models.Backup
 		}
 	}
 
-	// 2. Restore Playlist Configurations & Welcome Info
+	// 2. Restore Playlist Configurations & Welcome Info & Portal Branding
 	if req.RestorePlaylists && len(payload.Playlists) > 0 && s.playlistRepo != nil {
 		for _, p := range payload.Playlists {
 			if p.ID == 0 {
@@ -470,6 +616,9 @@ func (s *Service) RestoreFromPayload(ctx context.Context, payload *models.Backup
 
 			if len(p.WelcomeInfo) > 0 {
 				_ = s.playlistRepo.UpdateWelcomeInfo(ctx, targetPID, p.WelcomeInfo)
+			}
+			if len(p.PortalBranding) > 0 && string(p.PortalBranding) != "null" && string(p.PortalBranding) != "{}" {
+				_ = s.playlistRepo.UpdatePortalBranding(ctx, targetPID, p.PortalBranding)
 			}
 			_ = s.playlistRepo.UpdateSettings(ctx, targetPID, &p.AllowTracking, &p.LimitMaxConnections, &p.MaxConnections, &p.TrackingTimeoutMinutes, &p.CName, &p.EnforceCname, &p.CnameSSL)
 			if len(p.Patterns) > 0 {

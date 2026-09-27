@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"net/http"
+	"strings"
 	"time"
 
 	"golang.org/x/crypto/bcrypt"
@@ -99,9 +100,9 @@ func (h *AuthHandler) Login(w http.ResponseWriter, r *http.Request) {
 	if h.settingsRepo != nil {
 		if s, err := h.settingsRepo.Get(r.Context()); err == nil && s != nil {
 			if s.CaptchaProvider != "" {
-				provider = s.CaptchaProvider
+				provider = strings.ToLower(strings.TrimSpace(s.CaptchaProvider))
 			}
-			secretKey = s.CaptchaSecretKey
+			secretKey = strings.TrimSpace(s.CaptchaSecretKey)
 		}
 	}
 

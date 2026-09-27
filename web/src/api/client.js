@@ -427,6 +427,9 @@ export const userPortalApi = {
   login: async (username, password) => {
     const params = new URLSearchParams({ username, password, portal: '1' });
     const res = await fetch(`/player_api.php?${params.toString()}`);
+    if (res.status === 404) {
+      throw new Error('Invalid username or password');
+    }
     if (!res.ok) throw new Error('Failed to connect to server');
     const data = await res.json();
     if (!data || data.user_info?.auth === 0 || !data.user_info) {

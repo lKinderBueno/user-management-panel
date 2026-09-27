@@ -185,9 +185,12 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 	if _, ok := rawMap["captcha_secret_key"]; !ok && origCaptchaSecret != "" {
 		existing.CaptchaSecretKey = origCaptchaSecret
 	}
-	if strings.TrimSpace(existing.CaptchaProvider) == "" {
+	existing.CaptchaProvider = strings.ToLower(strings.TrimSpace(existing.CaptchaProvider))
+	if existing.CaptchaProvider == "" {
 		existing.CaptchaProvider = "default"
 	}
+	existing.CaptchaSiteKey = strings.TrimSpace(existing.CaptchaSiteKey)
+	existing.CaptchaSecretKey = strings.TrimSpace(existing.CaptchaSecretKey)
 
 	s := *existing
 
@@ -405,6 +408,13 @@ func (h *SettingsHandler) ClearCache(w http.ResponseWriter, r *http.Request) {
 			"deleted_count": 0,
 			"scope":         req.Scope,
 			"message":       "Cache is running in standalone mode (no-op).",
+			"cache_status": models.CacheStatusSummary{
+				IsConnected: false,
+				Backend:     "standalone",
+				KeysCount:   0,
+				MemoryUsed:  "N/A",
+				Uptime:      "N/A",
+			},
 		})
 		return
 	}
@@ -418,10 +428,20 @@ func (h *SettingsHandler) ClearCache(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	keysCount, memUsed, uptime, _ := h.cache.GetStats(r.Context())
+	cacheStatus := models.CacheStatusSummary{
+		IsConnected: true,
+		Backend:     "redis",
+		KeysCount:   keysCount,
+		MemoryUsed:  memUsed,
+		Uptime:      uptime,
+	}
+
 	writeJSON(w, http.StatusOK, map[string]interface{}{
 		"success":       true,
 		"deleted_count": count,
 		"scope":         req.Scope,
+		"cache_status":  cacheStatus,
 		"message":       fmt.Sprintf("Cache for scope '%s' cleared successfully (%d keys removed).", req.Scope, count),
 	})
 }
