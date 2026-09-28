@@ -447,6 +447,9 @@ func (h *SetupHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 		sysSettings.BlockDirectIPStreaming = req.BlockDirectIPStreaming
 	}
 
+	initSyncTime := time.Now().UTC()
+	sysSettings.LastPlaylistSync = &initSyncTime
+
 	if err := h.settingsRepo.Update(r.Context(), sysSettings); err != nil {
 		log.Printf("[WARN] Failed saving initial system settings: %v", err)
 	}

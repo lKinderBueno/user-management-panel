@@ -100,6 +100,9 @@ func (s *Scheduler) CheckAndRun(ctx context.Context) {
 			s.mu.RLock()
 			running := s.pSyncStatus.IsRunning
 			s.mu.RUnlock()
+			if !running && s.syncer != nil {
+				running = s.syncer.GetSyncStatus().IsRunning
+			}
 
 			if !running {
 				log.Printf("[SCHEDULER] Triggering automated playlist sync (interval=%dh)...", settings.PlaylistSyncIntervalHours)

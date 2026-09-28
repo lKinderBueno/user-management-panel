@@ -140,12 +140,12 @@ func (c *APIClient) SetEpgPacingDelay(d time.Duration) {
 	c.epgPacingDelay = d
 }
 
-// GetEpgPacingDelay returns the current EPG chunk pacing delay (defaults to 3s if not set).
+// GetEpgPacingDelay returns the current EPG chunk pacing delay (defaults to 1.5s if not set).
 func (c *APIClient) GetEpgPacingDelay() time.Duration {
 	c.mu.RLock()
 	defer c.mu.RUnlock()
 	if c.epgPacingDelay <= 0 {
-		return 3000 * time.Millisecond
+		return 1500 * time.Millisecond
 	}
 	return c.epgPacingDelay
 }
@@ -374,6 +374,30 @@ func (c *APIClient) doGetWithRetry(ctx context.Context, endpoint string, target 
 			}
 		}
 
+		// Retry transient network timeouts and 5xx errors if context is still active
+		if attempt < maxRetries && ctx.Err() == nil {
+			var apiErr *UpstreamAPIError
+			is5xx := errors.As(err, &apiErr) && (apiErr.StatusCode == 502 || apiErr.StatusCode == 503 || apiErr.StatusCode == 504)
+			errStr := strings.ToLower(err.Error())
+			isTimeoutOrNetErr := strings.Contains(errStr, "timeout") ||
+				strings.Contains(errStr, "deadline exceeded") ||
+				strings.Contains(errStr, "connection reset") ||
+				strings.Contains(errStr, "connection refused") ||
+				strings.Contains(errStr, "eof")
+
+			if is5xx || isTimeoutOrNetErr {
+				waitDuration := time.Duration(attempt+1) * 2 * time.Second
+				log.Printf("[CLIENT] Transient error on %s: %v. Retrying in %v (attempt %d/%d)...\n",
+					endpoint, err, waitDuration, attempt+1, maxRetries)
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(waitDuration):
+					continue
+				}
+			}
+		}
+
 		return err
 	}
 	return fmt.Errorf("retries exhausted for %s", endpoint)
@@ -401,30 +425,44 @@ func (c *APIClient) GetCategories(ctx context.Context, playlistID uint64, stream
 	return categories, nil
 }
 
-// GetChannels fetches a single batch of channels starting at offset.
-func (c *APIClient) GetChannels(ctx context.Context, playlistID uint64, offset int) ([]Channel, error) {
+// GetChannels fetches a single batch of channels starting after lastSentStreamID using V2 keyset pagination.
+func (c *APIClient) GetChannels(ctx context.Context, playlistID uint64, lastSentStreamID uint64, limit ...int) ([]Channel, error) {
 	params := url.Values{}
 	params.Set("playlist_id", strconv.FormatUint(playlistID, 10))
-	params.Set("offset", strconv.Itoa(offset))
+	params.Set("last_sent_stream_id", strconv.FormatUint(lastSentStreamID, 10))
+	if len(limit) > 0 && limit[0] > 0 {
+		l := limit[0]
+		if l > 20000 {
+			l = 20000
+		}
+		params.Set("limit", strconv.Itoa(l))
+	}
 
 	var channels []Channel
-	if err := c.doGetWithRetry(ctx, fmt.Sprintf("/token/channels?%s", params.Encode()), &channels); err != nil {
+	if err := c.doGetWithRetry(ctx, fmt.Sprintf("/token/v2/channels?%s", params.Encode()), &channels); err != nil {
 		return nil, err
 	}
 	return channels, nil
 }
 
-// GetAllChannels paginates through all channels for the given playlist.
-func (c *APIClient) GetAllChannels(ctx context.Context, playlistID uint64, batchSize int) ([]Channel, error) {
-	if batchSize <= 0 {
-		batchSize = 5000
+// GetChannelsV2 is an alias for GetChannels.
+func (c *APIClient) GetChannelsV2(ctx context.Context, playlistID uint64, lastSentStreamID uint64, limit ...int) ([]Channel, error) {
+	return c.GetChannels(ctx, playlistID, lastSentStreamID, limit...)
+}
+
+// GetAllChannels paginates through all channels for the given playlist using V2 keyset pagination.
+// If onProgress is provided, it is called after each batch with (downloaded, batchNum).
+func (c *APIClient) GetAllChannels(ctx context.Context, playlistID uint64, batchSize int, onProgress ...func(downloaded int, batchNum int)) ([]Channel, error) {
+	if batchSize <= 0 || batchSize > 20000 {
+		batchSize = 20000
 	}
 	var allChannels []Channel
-	offset := 0
+	var lastID uint64 = 0
 	pacing := c.GetStreamPacingDelay()
+	batchNum := 0
 
 	for {
-		if offset > 0 && pacing > 0 {
+		if lastID > 0 && pacing > 0 {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -432,7 +470,7 @@ func (c *APIClient) GetAllChannels(ctx context.Context, playlistID uint64, batch
 			}
 		}
 
-		batch, err := c.GetChannels(ctx, playlistID, offset)
+		batch, err := c.GetChannels(ctx, playlistID, lastID, batchSize)
 		if err != nil {
 			if errors.Is(err, ErrDataUnchanged) {
 				return nil, ErrDataUnchanged
@@ -443,40 +481,58 @@ func (c *APIClient) GetAllChannels(ctx context.Context, playlistID uint64, batch
 			break
 		}
 
+		batchNum++
 		allChannels = append(allChannels, batch...)
+		if len(onProgress) > 0 && onProgress[0] != nil {
+			onProgress[0](len(allChannels), batchNum)
+		}
 		if len(batch) < batchSize {
 			break
 		}
-		offset += len(batch)
+		lastID = batch[len(batch)-1].ID.Uint64()
 	}
 
 	return allChannels, nil
 }
 
-// GetVods fetches a single batch of VODs starting at offset.
-func (c *APIClient) GetVods(ctx context.Context, playlistID uint64, offset int) ([]Vod, error) {
+// GetVods fetches a single batch of VODs starting after lastSentStreamID using V2 keyset pagination.
+func (c *APIClient) GetVods(ctx context.Context, playlistID uint64, lastSentStreamID uint64, limit ...int) ([]Vod, error) {
 	params := url.Values{}
 	params.Set("playlist_id", strconv.FormatUint(playlistID, 10))
-	params.Set("offset", strconv.Itoa(offset))
+	params.Set("last_sent_stream_id", strconv.FormatUint(lastSentStreamID, 10))
+	if len(limit) > 0 && limit[0] > 0 {
+		l := limit[0]
+		if l > 20000 {
+			l = 20000
+		}
+		params.Set("limit", strconv.Itoa(l))
+	}
 
 	var vods []Vod
-	if err := c.doGetWithRetry(ctx, fmt.Sprintf("/token/vods?%s", params.Encode()), &vods); err != nil {
+	if err := c.doGetWithRetry(ctx, fmt.Sprintf("/token/v2/vods?%s", params.Encode()), &vods); err != nil {
 		return nil, err
 	}
 	return vods, nil
 }
 
-// GetAllVods paginates through all VODs for the given playlist.
-func (c *APIClient) GetAllVods(ctx context.Context, playlistID uint64, batchSize int) ([]Vod, error) {
-	if batchSize <= 0 {
-		batchSize = 5000
+// GetVodsV2 is an alias for GetVods.
+func (c *APIClient) GetVodsV2(ctx context.Context, playlistID uint64, lastSentStreamID uint64, limit ...int) ([]Vod, error) {
+	return c.GetVods(ctx, playlistID, lastSentStreamID, limit...)
+}
+
+// GetAllVods paginates through all VODs for the given playlist using V2 keyset pagination.
+// If onProgress is provided, it is called after each batch with (downloaded, batchNum).
+func (c *APIClient) GetAllVods(ctx context.Context, playlistID uint64, batchSize int, onProgress ...func(downloaded int, batchNum int)) ([]Vod, error) {
+	if batchSize <= 0 || batchSize > 20000 {
+		batchSize = 20000
 	}
 	var allVods []Vod
-	offset := 0
+	var lastID uint64 = 0
 	pacing := c.GetStreamPacingDelay()
+	batchNum := 0
 
 	for {
-		if offset > 0 && pacing > 0 {
+		if lastID > 0 && pacing > 0 {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -484,7 +540,7 @@ func (c *APIClient) GetAllVods(ctx context.Context, playlistID uint64, batchSize
 			}
 		}
 
-		batch, err := c.GetVods(ctx, playlistID, offset)
+		batch, err := c.GetVods(ctx, playlistID, lastID, batchSize)
 		if err != nil {
 			if errors.Is(err, ErrDataUnchanged) {
 				return nil, ErrDataUnchanged
@@ -495,40 +551,58 @@ func (c *APIClient) GetAllVods(ctx context.Context, playlistID uint64, batchSize
 			break
 		}
 
+		batchNum++
 		allVods = append(allVods, batch...)
+		if len(onProgress) > 0 && onProgress[0] != nil {
+			onProgress[0](len(allVods), batchNum)
+		}
 		if len(batch) < batchSize {
 			break
 		}
-		offset += len(batch)
+		lastID = batch[len(batch)-1].ID.Uint64()
 	}
 
 	return allVods, nil
 }
 
-// GetSeries fetches a single batch of series starting at offset.
-func (c *APIClient) GetSeries(ctx context.Context, playlistID uint64, offset int) ([]Series, error) {
+// GetSeries fetches a single batch of series starting after lastSentStreamID using V2 keyset pagination.
+func (c *APIClient) GetSeries(ctx context.Context, playlistID uint64, lastSentStreamID uint64, limit ...int) ([]Series, error) {
 	params := url.Values{}
 	params.Set("playlist_id", strconv.FormatUint(playlistID, 10))
-	params.Set("offset", strconv.Itoa(offset))
+	params.Set("last_sent_stream_id", strconv.FormatUint(lastSentStreamID, 10))
+	if len(limit) > 0 && limit[0] > 0 {
+		l := limit[0]
+		if l > 20000 {
+			l = 20000
+		}
+		params.Set("limit", strconv.Itoa(l))
+	}
 
 	var seriesList []Series
-	if err := c.doGetWithRetry(ctx, fmt.Sprintf("/token/series?%s", params.Encode()), &seriesList); err != nil {
+	if err := c.doGetWithRetry(ctx, fmt.Sprintf("/token/v2/series?%s", params.Encode()), &seriesList); err != nil {
 		return nil, err
 	}
 	return seriesList, nil
 }
 
-// GetAllSeries paginates through all series for the given playlist.
-func (c *APIClient) GetAllSeries(ctx context.Context, playlistID uint64, batchSize int) ([]Series, error) {
-	if batchSize <= 0 {
-		batchSize = 5000
+// GetSeriesV2 is an alias for GetSeries.
+func (c *APIClient) GetSeriesV2(ctx context.Context, playlistID uint64, lastSentStreamID uint64, limit ...int) ([]Series, error) {
+	return c.GetSeries(ctx, playlistID, lastSentStreamID, limit...)
+}
+
+// GetAllSeries paginates through all series for the given playlist using V2 keyset pagination.
+// If onProgress is provided, it is called after each batch with (downloaded, batchNum).
+func (c *APIClient) GetAllSeries(ctx context.Context, playlistID uint64, batchSize int, onProgress ...func(downloaded int, batchNum int)) ([]Series, error) {
+	if batchSize <= 0 || batchSize > 20000 {
+		batchSize = 20000
 	}
 	var allSeries []Series
-	offset := 0
+	var lastID uint64 = 0
 	pacing := c.GetStreamPacingDelay()
+	batchNum := 0
 
 	for {
-		if offset > 0 && pacing > 0 {
+		if lastID > 0 && pacing > 0 {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -536,7 +610,7 @@ func (c *APIClient) GetAllSeries(ctx context.Context, playlistID uint64, batchSi
 			}
 		}
 
-		batch, err := c.GetSeries(ctx, playlistID, offset)
+		batch, err := c.GetSeries(ctx, playlistID, lastID, batchSize)
 		if err != nil {
 			if errors.Is(err, ErrDataUnchanged) {
 				return nil, ErrDataUnchanged
@@ -547,40 +621,58 @@ func (c *APIClient) GetAllSeries(ctx context.Context, playlistID uint64, batchSi
 			break
 		}
 
+		batchNum++
 		allSeries = append(allSeries, batch...)
+		if len(onProgress) > 0 && onProgress[0] != nil {
+			onProgress[0](len(allSeries), batchNum)
+		}
 		if len(batch) < batchSize {
 			break
 		}
-		offset += len(batch)
+		lastID = batch[len(batch)-1].ID.Uint64()
 	}
 
 	return allSeries, nil
 }
 
-// GetSeriesEpisodes fetches a single batch of series episodes starting at offset.
-func (c *APIClient) GetSeriesEpisodes(ctx context.Context, playlistID uint64, offset int) ([]SeriesEpisode, error) {
+// GetSeriesEpisodes fetches a single batch of series episodes starting after lastSentStreamID using V2 keyset pagination.
+func (c *APIClient) GetSeriesEpisodes(ctx context.Context, playlistID uint64, lastSentStreamID uint64, limit ...int) ([]SeriesEpisode, error) {
 	params := url.Values{}
 	params.Set("playlist_id", strconv.FormatUint(playlistID, 10))
-	params.Set("offset", strconv.Itoa(offset))
+	params.Set("last_sent_stream_id", strconv.FormatUint(lastSentStreamID, 10))
+	if len(limit) > 0 && limit[0] > 0 {
+		l := limit[0]
+		if l > 20000 {
+			l = 20000
+		}
+		params.Set("limit", strconv.Itoa(l))
+	}
 
 	var episodes []SeriesEpisode
-	if err := c.doGetWithRetry(ctx, fmt.Sprintf("/token/series-episodes?%s", params.Encode()), &episodes); err != nil {
+	if err := c.doGetWithRetry(ctx, fmt.Sprintf("/token/v2/series-episodes?%s", params.Encode()), &episodes); err != nil {
 		return nil, err
 	}
 	return episodes, nil
 }
 
-// GetAllSeriesEpisodes paginates through all series episodes for the given playlist.
-func (c *APIClient) GetAllSeriesEpisodes(ctx context.Context, playlistID uint64, batchSize int) ([]SeriesEpisode, error) {
-	if batchSize <= 0 {
-		batchSize = 5000
+// GetSeriesEpisodesV2 is an alias for GetSeriesEpisodes.
+func (c *APIClient) GetSeriesEpisodesV2(ctx context.Context, playlistID uint64, lastSentStreamID uint64, limit ...int) ([]SeriesEpisode, error) {
+	return c.GetSeriesEpisodes(ctx, playlistID, lastSentStreamID, limit...)
+}
+
+// GetAllSeriesEpisodes paginates through all series episodes for the given playlist using V2 keyset pagination.
+// If onProgress is provided, it is called after each batch with (downloaded, batchNum).
+func (c *APIClient) GetAllSeriesEpisodes(ctx context.Context, playlistID uint64, batchSize int, onProgress ...func(downloaded int, batchNum int)) ([]SeriesEpisode, error) {
+	if batchSize <= 0 || batchSize > 20000 {
+		batchSize = 20000
 	}
 	var allEpisodes []SeriesEpisode
-	offset := 0
+	var lastID uint64 = 0
 	pacing := c.GetStreamPacingDelay()
+	batchNum := 0
 
 	for {
-		if offset > 0 && pacing > 0 {
+		if lastID > 0 && pacing > 0 {
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
@@ -588,7 +680,7 @@ func (c *APIClient) GetAllSeriesEpisodes(ctx context.Context, playlistID uint64,
 			}
 		}
 
-		batch, err := c.GetSeriesEpisodes(ctx, playlistID, offset)
+		batch, err := c.GetSeriesEpisodes(ctx, playlistID, lastID, batchSize)
 		if err != nil {
 			if errors.Is(err, ErrDataUnchanged) {
 				return nil, ErrDataUnchanged
@@ -599,11 +691,15 @@ func (c *APIClient) GetAllSeriesEpisodes(ctx context.Context, playlistID uint64,
 			break
 		}
 
+		batchNum++
 		allEpisodes = append(allEpisodes, batch...)
+		if len(onProgress) > 0 && onProgress[0] != nil {
+			onProgress[0](len(allEpisodes), batchNum)
+		}
 		if len(batch) < batchSize {
 			break
 		}
-		offset += len(batch)
+		lastID = batch[len(batch)-1].ID.Uint64()
 	}
 
 	return allEpisodes, nil
@@ -633,11 +729,12 @@ func (c *APIClient) GetEPG(ctx context.Context, epgReq EpgRequest) ([]EpgProgram
 	return programmes, nil
 }
 
-// GetEPGInChunks chunks the epgIDs into batches of max 100 IDs and calls GetEPG for each chunk.
+// GetEPGInChunks chunks the epgIDs into batches of max 200 IDs and calls GetEPG for each chunk.
 // It handles rate limits (HTTP 429) automatically by waiting the requested Retry-After duration,
-// and enforces a pacing delay between chunks (default 3,000ms) to strictly respect the max 20 req/min limit on /epg.
-func (c *APIClient) GetEPGInChunks(ctx context.Context, epgIDs []string, days int) ([]EpgProgramme, error) {
-	const chunkSize = 100
+// and enforces a pacing delay between chunks (default 1,500ms) to respect the 40 req/min limit on /epg.
+// If onProgress is provided, it is invoked after each chunk with (processed, total).
+func (c *APIClient) GetEPGInChunks(ctx context.Context, epgIDs []string, days int, onProgress ...func(processed int, total int)) ([]EpgProgramme, error) {
+	const chunkSize = 200
 	var allProgrammes []EpgProgramme
 	pacing := c.GetEpgPacingDelay()
 
@@ -694,19 +791,23 @@ func (c *APIClient) GetEPGInChunks(ctx context.Context, epgIDs []string, days in
 
 			return nil, fmt.Errorf("error fetching epg chunk [%d:%d]: %w", i, end, err)
 		}
+
+		if len(onProgress) > 0 && onProgress[0] != nil {
+			onProgress[0](end, len(epgIDs))
+		}
 	}
 
 	return allProgrammes, nil
 }
 
-// GetEPGStatus calls POST /token/epg/status in batches of 100 IDs.
+// GetEPGStatus calls POST /token/epg/status in batches of 1500 IDs.
 // It returns a map of epg_id -> max available stop unix timestamp.
 func (c *APIClient) GetEPGStatus(ctx context.Context, epgIDs []string) (map[string]int64, error) {
 	if len(epgIDs) == 0 {
 		return make(map[string]int64), nil
 	}
 
-	const chunkSize = 100
+	const chunkSize = 1500
 	allStatus := make(map[string]int64, len(epgIDs))
 
 	for i := 0; i < len(epgIDs); i += chunkSize {
@@ -729,7 +830,7 @@ func (c *APIClient) GetEPGStatus(ctx context.Context, epgIDs []string) (map[stri
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			case <-time.After(200 * time.Millisecond):
+			case <-time.After(1000 * time.Millisecond):
 			}
 		}
 
@@ -779,13 +880,13 @@ func (c *APIClient) GetEPGStatus(ctx context.Context, epgIDs []string) (map[stri
 	return allStatus, nil
 }
 
-// GetEpgChannels calls POST /token/epg/channels for the given slice of epg identifiers in chunks.
+// GetEpgChannels calls POST /token/epg/channels for the given slice of epg identifiers in chunks of 1500.
 func (c *APIClient) GetEpgChannels(ctx context.Context, epgIDs []string) ([]EpgChannelMeta, error) {
 	if len(epgIDs) == 0 {
 		return nil, nil
 	}
 
-	const chunkSize = 200
+	const chunkSize = 1500
 	var allMeta []EpgChannelMeta
 
 	for i := 0; i < len(epgIDs); i += chunkSize {
@@ -805,7 +906,7 @@ func (c *APIClient) GetEpgChannels(ctx context.Context, epgIDs []string) ([]EpgC
 			select {
 			case <-ctx.Done():
 				return nil, ctx.Err()
-			case <-time.After(100 * time.Millisecond):
+			case <-time.After(1000 * time.Millisecond):
 			}
 		}
 
@@ -880,6 +981,9 @@ func (c *APIClient) GetAllUsers(ctx context.Context, playlistID uint64, batchSiz
 	bSize := 5000
 	if len(batchSize) > 0 && batchSize[0] > 0 {
 		bSize = batchSize[0]
+		if bSize > 20000 {
+			bSize = 20000
+		}
 	}
 	var allUsers []ClientManagedUser
 	offset := 0

@@ -194,7 +194,7 @@ type Category struct {
 	Name     string      `json:"name"`
 }
 
-// Channel represents a live channel stream returned by /token/channels
+// Channel represents a live channel stream returned by /token/v2/channels
 type Channel struct {
 	ID          FlexibleID      `json:"id"`
 	Position    FlexibleInt     `json:"position"`
@@ -209,7 +209,7 @@ type Channel struct {
 	IsTypeMoved FlexibleBool    `json:"is_type_moved"`
 }
 
-// Vod represents a video-on-demand stream returned by /token/vods
+// Vod represents a video-on-demand stream returned by /token/v2/vods
 type Vod struct {
 	ID          FlexibleID       `json:"id"`
 	Position    FlexibleInt      `json:"position"`
@@ -222,7 +222,7 @@ type Vod struct {
 	Url         string           `json:"url"`
 }
 
-// Series represents a TV series returned by /token/series
+// Series represents a TV series returned by /token/v2/series
 type Series struct {
 	ID             FlexibleID       `json:"id"`
 	Position       FlexibleInt      `json:"position"`
@@ -242,7 +242,7 @@ type Series struct {
 	EpisodeUpdated FlexibleTime     `json:"episodeUpdated"`
 }
 
-// SeriesEpisode represents an episode of a series returned by /token/series-episodes
+// SeriesEpisode represents an episode of a series returned by /token/v2/series-episodes
 type SeriesEpisode struct {
 	ID       FlexibleID  `json:"id"`
 	Name     string      `json:"name"`

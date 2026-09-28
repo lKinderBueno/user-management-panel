@@ -322,7 +322,7 @@ export default function SyncLogsModal({ playlist, onClose, onSyncTriggered }) {
 
                     {/* Middle row: Counts / Stats */}
                     {(log.channels_count > 0 || log.movies_count > 0 || log.series_count > 0 || log.episodes_count > 0 || log.epg_count > 0) && (
-                      <div className="grid grid-cols-2 sm:grid-cols-5 gap-1.5 py-2 border-y border-[#e9ecef] dark:border-slate-700 text-[13px]">
+                      <div className={`grid grid-cols-2 ${log.epg_count > 0 ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} gap-1.5 py-2 border-y border-[#e9ecef] dark:border-slate-700 text-[13px]`}>
                         <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-2.5 py-1 rounded border border-[#dee2e6] dark:border-slate-700 shadow-sm">
                           <Tv className="w-3 h-3 text-[#3970e1] dark:text-blue-400" />
                           <span className="text-[#8898aa] dark:text-slate-400">Channels:</span>
@@ -343,11 +343,13 @@ export default function SyncLogsModal({ playlist, onClose, onSyncTriggered }) {
                           <span className="text-[#8898aa] dark:text-slate-400">Episodes:</span>
                           <strong className="font-mono text-[#32325d] dark:text-slate-100">{log.episodes_count}</strong>
                         </div>
-                        <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-2.5 py-1 rounded border border-[#dee2e6] dark:border-slate-700 shadow-sm">
-                          <Calendar className="w-3 h-3 text-[#11cdef] dark:text-cyan-400" />
-                          <span className="text-[#8898aa] dark:text-slate-400">EPG:</span>
-                          <strong className="font-mono text-[#32325d] dark:text-slate-100">{log.epg_count}</strong>
-                        </div>
+                        {log.epg_count > 0 && (
+                          <div className="flex items-center gap-1.5 bg-white dark:bg-slate-800 px-2.5 py-1 rounded border border-[#dee2e6] dark:border-slate-700 shadow-sm">
+                            <Calendar className="w-3 h-3 text-[#11cdef] dark:text-cyan-400" />
+                            <span className="text-[#8898aa] dark:text-slate-400">EPG:</span>
+                            <strong className="font-mono text-[#32325d] dark:text-slate-100">{log.epg_count}</strong>
+                          </div>
+                        )}
                       </div>
                     )}
 
@@ -362,7 +364,7 @@ export default function SyncLogsModal({ playlist, onClose, onSyncTriggered }) {
                             : 'text-[#525f7f] dark:text-slate-300'
                         }`}
                       >
-                        {log.message}
+                        {log.message.replace(/,?\s*0 EPG programmes/gi, '')}
                       </p>
                     )}
                   </div>

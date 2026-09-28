@@ -152,8 +152,11 @@ export default function InitialSetup({ onSetupComplete }) {
 
     let pollAttempts = 0;
     let hasStarted = false;
+    let interval = null;
+    let isFinished = false;
 
     const poll = async () => {
+      if (isFinished) return;
       try {
         const [status, logs] = await Promise.all([
           playlistApi.getSyncStatus().catch(() => null),
@@ -181,6 +184,8 @@ export default function InitialSetup({ onSetupComplete }) {
 
           if (status.status === 'completed' || status.status === 'failed' || (hasStarted && !status.is_running)) {
             setIsSyncFinished(true);
+            isFinished = true;
+            if (interval) clearInterval(interval);
           }
         }
 
@@ -198,11 +203,11 @@ export default function InitialSetup({ onSetupComplete }) {
     };
 
     poll();
-    const interval = setInterval(poll, 1000);
+    interval = setInterval(poll, 1000);
 
     return () => {
       clearInterval(timer);
-      clearInterval(interval);
+      if (interval) clearInterval(interval);
     };
   }, [isPostSetupSyncing]);
 
@@ -371,12 +376,28 @@ export default function InitialSetup({ onSetupComplete }) {
   if (isPostSetupSyncing) {
     const isCompleted = isSyncFinished && syncStatus?.status !== 'failed';
     const isFailed = syncStatus?.status === 'failed';
-    // Filter to only actual playlist logs created during this setup session
-    const playlistLogs = syncLogs.filter((l) => {
+    // Filter to only actual playlist logs created during this setup session and deduplicate per playlist (preferring the populated import log)
+    const playlistLogsMap = new Map();
+    for (const l of syncLogs) {
       const logTime = new Date(l.created_at).getTime();
-      if (logTime < setupStartTimeRef.current - 15000) return false;
-      return l.sync_type === 'playlist' || (l.playlist_id != null && l.playlist_id > 0);
-    });
+      if (logTime < setupStartTimeRef.current - 15000) continue;
+      if (l.sync_type !== 'playlist' && (l.playlist_id == null || l.playlist_id <= 0)) continue;
+
+      const key = l.playlist_id || l.playlist_name;
+      const existing = playlistLogsMap.get(key);
+      if (!existing) {
+        playlistLogsMap.set(key, l);
+      } else {
+        const existingHasItems = (existing.channels_count || 0) + (existing.movies_count || 0) + (existing.series_count || 0) > 0;
+        const currentHasItems = (l.channels_count || 0) + (l.movies_count || 0) + (l.series_count || 0) > 0;
+        if (!existingHasItems && currentHasItems) {
+          playlistLogsMap.set(key, l);
+        } else if (existing.status !== 'success' && l.status === 'success') {
+          playlistLogsMap.set(key, l);
+        }
+      }
+    }
+    const playlistLogs = Array.from(playlistLogsMap.values());
 
     const totalChannels = playlistLogs.reduce((acc, l) => acc + (Number(l.channels_count) || 0), 0);
     const totalMovies = playlistLogs.reduce((acc, l) => acc + (Number(l.movies_count) || 0), 0);
@@ -440,7 +461,7 @@ export default function InitialSetup({ onSetupComplete }) {
                 <div className="text-[11px] font-semibold uppercase tracking-wider text-[#8898aa] dark:text-slate-400">
                   {isCompleted ? 'Status' : isFailed ? 'Alert' : 'Current Step'}
                 </div>
-                <div className="text-sm font-medium text-[#32325d] dark:text-white truncate">
+                <div className="text-sm font-medium text-[#32325d] dark:text-white break-words">
                   {isCompleted
                     ? 'All playlists up to date'
                     : isFailed
@@ -520,15 +541,27 @@ export default function InitialSetup({ onSetupComplete }) {
                   <span className="text-slate-400 shrink-0 select-none">
                     [{new Date(log.created_at || Date.now()).toLocaleTimeString()}]
                   </span>
-                  <span className={log.status === 'success' ? 'text-emerald-400' : 'text-rose-400'}>
-                    {log.status === 'success' ? '✓' : '✗'}
+                  <span className={
+                    log.status === 'success'
+                      ? 'text-emerald-400'
+                      : log.status === 'skipped'
+                      ? 'text-slate-400'
+                      : 'text-rose-400'
+                  }>
+                    {log.status === 'success' ? '✓' : log.status === 'skipped' ? '—' : '✗'}
                   </span>
                   <div className="space-y-0.5">
                     <div className="font-semibold text-white">
                       {log.playlist_name || `Playlist #${log.playlist_id}`} — {log.status.toUpperCase()}
                     </div>
                     <div className="text-slate-400 text-[11px]">
-                      {log.channels_count} channels • {log.movies_count} movies • {log.series_count} series • {log.episodes_count} episodes • {log.epg_count} EPG programmes ({log.duration_ms}ms)
+                      {log.status === 'skipped' ? (
+                        <span>Up to date • no changes detected ({log.duration_ms}ms)</span>
+                      ) : (
+                        <span>
+                          {log.channels_count} channels • {log.movies_count} movies • {log.series_count} series • {log.episodes_count} episodes{log.epg_count > 0 ? ` • ${log.epg_count} EPG programmes` : ''} ({log.duration_ms}ms)
+                        </span>
+                      )}
                     </div>
                   </div>
                 </div>

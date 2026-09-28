@@ -93,9 +93,9 @@ func Load() (*Config, error) {
 		epgDays = 7
 	}
 
-	batchSize, _ := strconv.Atoi(getEnv("BATCH_SIZE", "5000"))
-	if batchSize <= 0 {
-		batchSize = 5000
+	batchSize, _ := strconv.Atoi(getEnv("BATCH_SIZE", "20000"))
+	if batchSize <= 0 || batchSize > 20000 {
+		batchSize = 20000
 	}
 
 	timeoutSec, _ := strconv.Atoi(getEnv("HTTP_TIMEOUT", "60"))
@@ -128,23 +128,23 @@ func Load() (*Config, error) {
 	}
 
 	cfg := &Config{
-		ApiURL:                    apiURL,
-		ApiToken:                  apiToken,
-		ApiPassword:               apiPassword,
-		DBDSN:                     dsn,
-		RedisHost:                 redisHost,
-		RedisPort:                 redisPort,
-		RedisPassword:             redisPass,
-		RedisURL:                  redisURL,
-		RedisDB:                   redisDB,
-		AntiBruteForceMaxAttempts: maxAttempts,
-		AntiBruteForceWindow:      time.Duration(windowMinutes) * time.Minute,
-		AntiBruteForceBanDuration: time.Duration(banHours) * time.Hour,
-		TMDBApiKey:                tmdbApiKey,
-		SyncInterval:              syncInterval,
-		EpgDays:                   epgDays,
-		BatchSize:                 batchSize,
-		HTTPTimeout:               time.Duration(timeoutSec) * time.Second,
+		ApiURL:                      apiURL,
+		ApiToken:                    apiToken,
+		ApiPassword:                 apiPassword,
+		DBDSN:                       dsn,
+		RedisHost:                   redisHost,
+		RedisPort:                   redisPort,
+		RedisPassword:               redisPass,
+		RedisURL:                    redisURL,
+		RedisDB:                     redisDB,
+		AntiBruteForceMaxAttempts:   maxAttempts,
+		AntiBruteForceWindow:        time.Duration(windowMinutes) * time.Minute,
+		AntiBruteForceBanDuration:   time.Duration(banHours) * time.Hour,
+		TMDBApiKey:                  tmdbApiKey,
+		SyncInterval:                syncInterval,
+		EpgDays:                     epgDays,
+		BatchSize:                   batchSize,
+		HTTPTimeout:                 time.Duration(timeoutSec) * time.Second,
 		DisableOrphanReconciliation: os.Getenv("DISABLE_ORPHAN_RECONCILIATION") == "true" || os.Getenv("DISABLE_ORPHAN_RECONCILIATION") == "1",
 		LogLevel:                    getEnv("LOG_LEVEL", "info"),
 	}

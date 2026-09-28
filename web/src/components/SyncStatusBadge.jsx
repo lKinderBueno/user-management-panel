@@ -33,7 +33,7 @@ export default function SyncStatusBadge({ onSyncCompleted }) {
           wasRunningRef.current = true;
           setStatus(data);
           setDisplayMode('running');
-          timer = setTimeout(poll, 2500);
+          timer = setTimeout(poll, 1500);
         } else {
           // Sync is not running
           if (wasRunningRef.current) {
@@ -147,11 +147,11 @@ export default function SyncStatusBadge({ onSyncCompleted }) {
 
         <div className="flex-1 min-w-0">
           <div className="flex items-center justify-between gap-2">
-            <span className="font-bold text-[12px] tracking-wide uppercase text-[#32325d] dark:text-white">
+            <span className="font-bold text-[12px] tracking-wide uppercase text-[#32325d] dark:text-white truncate">
               {isRunning
-                ? 'Playlist Synchronization'
+                ? (status.playlist_name ? `Syncing: ${status.playlist_name}` : 'Playlist Synchronization')
                 : isSuccess
-                ? 'Sync Completed'
+                ? (status.playlist_name ? `Sync Completed: ${status.playlist_name}` : 'Sync Completed')
                 : 'Sync Failed'}
             </span>
           </div>
@@ -196,7 +196,7 @@ export default function SyncStatusBadge({ onSyncCompleted }) {
               </div>
             </div>
           ) : (
-            <p className="text-[13px] text-[#8898aa] dark:text-slate-400 mt-0.5 line-clamp-2 leading-tight font-mono font-medium break-all">
+            <p className="text-[12px] sm:text-[13px] text-[#525f7f] dark:text-slate-300 mt-0.5 line-clamp-2 leading-tight font-mono font-medium break-words">
               {isRunning
                 ? (status.step || 'Processing playlists...')
                 : (status.step || 'Synchronization completed successfully')}

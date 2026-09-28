@@ -110,17 +110,27 @@ func (r *StreamRepo) SaveCategories(ctx context.Context, listID uint64, tableNam
 
 // SaveChannels inserts or updates live channels for the given playlist.
 func (r *StreamRepo) SaveChannels(ctx context.Context, listID uint64, channels []client.Channel, syncTime ...time.Time) error {
+	var st time.Time
+	if len(syncTime) > 0 {
+		st = syncTime[0]
+	}
+	return r.SaveChannelsWithProgress(ctx, listID, channels, st, nil)
+}
+
+// SaveChannelsWithProgress inserts or updates live channels for the given playlist and invokes onProgress periodically.
+func (r *StreamRepo) SaveChannelsWithProgress(ctx context.Context, listID uint64, channels []client.Channel, syncTime time.Time, onProgress func(saved, total int)) error {
 	if len(channels) == 0 {
 		return nil
 	}
 
 	seenAt := time.Now().UTC().Truncate(time.Millisecond)
-	if len(syncTime) > 0 && !syncTime[0].IsZero() {
-		seenAt = syncTime[0].Truncate(time.Millisecond)
+	if !syncTime.IsZero() {
+		seenAt = syncTime.Truncate(time.Millisecond)
 	}
 
 	const batchSize = 500
 	const batchDelay = 15 * time.Millisecond
+	lastReport := time.Now()
 	for i := 0; i < len(channels); i += batchSize {
 		select {
 		case <-ctx.Done():
@@ -178,6 +188,14 @@ func (r *StreamRepo) SaveChannels(ctx context.Context, listID uint64, channels [
 			return fmt.Errorf("failed saving channels chunk: %w", err)
 		}
 
+		if onProgress != nil {
+			now := time.Now()
+			if end == len(channels) || now.Sub(lastReport) >= 1*time.Second {
+				onProgress(end, len(channels))
+				lastReport = now
+			}
+		}
+
 		if end < len(channels) {
 			time.Sleep(batchDelay)
 		}
@@ -188,17 +206,27 @@ func (r *StreamRepo) SaveChannels(ctx context.Context, listID uint64, channels [
 
 // SaveVods inserts or updates VOD streams for the given playlist.
 func (r *StreamRepo) SaveVods(ctx context.Context, listID uint64, vods []client.Vod, syncTime ...time.Time) error {
+	var st time.Time
+	if len(syncTime) > 0 {
+		st = syncTime[0]
+	}
+	return r.SaveVodsWithProgress(ctx, listID, vods, st, nil)
+}
+
+// SaveVodsWithProgress inserts or updates VOD streams for the given playlist and invokes onProgress periodically.
+func (r *StreamRepo) SaveVodsWithProgress(ctx context.Context, listID uint64, vods []client.Vod, syncTime time.Time, onProgress func(saved, total int)) error {
 	if len(vods) == 0 {
 		return nil
 	}
 
 	seenAt := time.Now().UTC().Truncate(time.Millisecond)
-	if len(syncTime) > 0 && !syncTime[0].IsZero() {
-		seenAt = syncTime[0].Truncate(time.Millisecond)
+	if !syncTime.IsZero() {
+		seenAt = syncTime.Truncate(time.Millisecond)
 	}
 
 	const batchSize = 500
 	const batchDelay = 15 * time.Millisecond
+	lastReport := time.Now()
 	for i := 0; i < len(vods); i += batchSize {
 		select {
 		case <-ctx.Done():
@@ -256,6 +284,14 @@ func (r *StreamRepo) SaveVods(ctx context.Context, listID uint64, vods []client.
 			return fmt.Errorf("failed saving vods chunk: %w", err)
 		}
 
+		if onProgress != nil {
+			now := time.Now()
+			if end == len(vods) || now.Sub(lastReport) >= 1*time.Second {
+				onProgress(end, len(vods))
+				lastReport = now
+			}
+		}
+
 		if end < len(vods) {
 			time.Sleep(batchDelay)
 		}
@@ -266,17 +302,27 @@ func (r *StreamRepo) SaveVods(ctx context.Context, listID uint64, vods []client.
 
 // SaveSeries inserts or updates TV series for the given playlist.
 func (r *StreamRepo) SaveSeries(ctx context.Context, listID uint64, seriesList []client.Series, syncTime ...time.Time) error {
+	var st time.Time
+	if len(syncTime) > 0 {
+		st = syncTime[0]
+	}
+	return r.SaveSeriesWithProgress(ctx, listID, seriesList, st, nil)
+}
+
+// SaveSeriesWithProgress inserts or updates TV series for the given playlist and invokes onProgress periodically.
+func (r *StreamRepo) SaveSeriesWithProgress(ctx context.Context, listID uint64, seriesList []client.Series, syncTime time.Time, onProgress func(saved, total int)) error {
 	if len(seriesList) == 0 {
 		return nil
 	}
 
 	seenAt := time.Now().UTC().Truncate(time.Millisecond)
-	if len(syncTime) > 0 && !syncTime[0].IsZero() {
-		seenAt = syncTime[0].Truncate(time.Millisecond)
+	if !syncTime.IsZero() {
+		seenAt = syncTime.Truncate(time.Millisecond)
 	}
 
 	const batchSize = 400
 	const batchDelay = 15 * time.Millisecond
+	lastReport := time.Now()
 	for i := 0; i < len(seriesList); i += batchSize {
 		select {
 		case <-ctx.Done():
@@ -350,6 +396,14 @@ func (r *StreamRepo) SaveSeries(ctx context.Context, listID uint64, seriesList [
 			return fmt.Errorf("failed saving series chunk: %w", err)
 		}
 
+		if onProgress != nil {
+			now := time.Now()
+			if end == len(seriesList) || now.Sub(lastReport) >= 1*time.Second {
+				onProgress(end, len(seriesList))
+				lastReport = now
+			}
+		}
+
 		if end < len(seriesList) {
 			time.Sleep(batchDelay)
 		}
@@ -360,17 +414,27 @@ func (r *StreamRepo) SaveSeries(ctx context.Context, listID uint64, seriesList [
 
 // SaveSeriesEpisodes inserts or updates series episodes for the given playlist.
 func (r *StreamRepo) SaveSeriesEpisodes(ctx context.Context, listID uint64, episodes []client.SeriesEpisode, syncTime ...time.Time) error {
+	var st time.Time
+	if len(syncTime) > 0 {
+		st = syncTime[0]
+	}
+	return r.SaveSeriesEpisodesWithProgress(ctx, listID, episodes, st, nil)
+}
+
+// SaveSeriesEpisodesWithProgress inserts or updates series episodes for the given playlist and invokes onProgress periodically.
+func (r *StreamRepo) SaveSeriesEpisodesWithProgress(ctx context.Context, listID uint64, episodes []client.SeriesEpisode, syncTime time.Time, onProgress func(saved, total int)) error {
 	if len(episodes) == 0 {
 		return nil
 	}
 
 	seenAt := time.Now().UTC().Truncate(time.Millisecond)
-	if len(syncTime) > 0 && !syncTime[0].IsZero() {
-		seenAt = syncTime[0].Truncate(time.Millisecond)
+	if !syncTime.IsZero() {
+		seenAt = syncTime.Truncate(time.Millisecond)
 	}
 
 	const batchSize = 500
 	const batchDelay = 15 * time.Millisecond
+	lastReport := time.Now()
 	for i := 0; i < len(episodes); i += batchSize {
 		select {
 		case <-ctx.Done():
@@ -411,6 +475,14 @@ func (r *StreamRepo) SaveSeriesEpisodes(ctx context.Context, listID uint64, epis
 
 		if _, err := r.db.ExecContext(ctx, query, valueArgs...); err != nil {
 			return fmt.Errorf("failed saving series episodes chunk: %w", err)
+		}
+
+		if onProgress != nil {
+			now := time.Now()
+			if end == len(episodes) || now.Sub(lastReport) >= 1*time.Second {
+				onProgress(end, len(episodes))
+				lastReport = now
+			}
 		}
 
 		if end < len(episodes) {

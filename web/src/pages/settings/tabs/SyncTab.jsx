@@ -380,7 +380,7 @@ export default function SyncTab({
             </span>
           </div>
           {pStatus.step && (
-            <div className="pt-1.5 border-t border-[#e9ecef] dark:border-slate-800 text-[13px] text-[#8898aa] dark:text-slate-400 truncate">
+            <div className="pt-1.5 border-t border-[#e9ecef] dark:border-slate-800 text-[13px] text-[#8898aa] dark:text-slate-400 break-words">
               <span className="text-[#525f7f] dark:text-slate-300 font-semibold">Status:</span> {pStatus.step}
             </div>
           )}

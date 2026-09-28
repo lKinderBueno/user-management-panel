@@ -206,19 +206,29 @@ func (r *EpgRepo) PruneOldProgrammes(ctx context.Context, maxFutureDays ...int) 
 // and precalculates/updates the max stop in epg_channels.
 // If maxFutureDays is passed and > 0, events starting beyond time.Now().UTC() + maxFutureDays are discarded.
 func (r *EpgRepo) SaveEpgProgrammes(ctx context.Context, programmes []client.EpgProgramme, maxFutureDays ...int) error {
+	var mfd int
+	if len(maxFutureDays) > 0 {
+		mfd = maxFutureDays[0]
+	}
+	return r.SaveEpgProgrammesWithProgress(ctx, programmes, mfd, nil)
+}
+
+// SaveEpgProgrammesWithProgress inserts or updates EPG programme records in MariaDB and invokes onProgress periodically.
+func (r *EpgRepo) SaveEpgProgrammesWithProgress(ctx context.Context, programmes []client.EpgProgramme, maxFutureDays int, onProgress func(saved, total int)) error {
 	if len(programmes) == 0 {
 		return nil
 	}
 
 	var maxFutureCutoff time.Time
-	if len(maxFutureDays) > 0 && maxFutureDays[0] > 0 {
-		maxFutureCutoff = time.Now().UTC().AddDate(0, 0, maxFutureDays[0])
+	if maxFutureDays > 0 {
+		maxFutureCutoff = time.Now().UTC().AddDate(0, 0, maxFutureDays)
 	}
 
 	maxStops := make(map[string]time.Time)
 
-	const batchSize = 300
-	const batchDelay = 15 * time.Millisecond
+	const batchSize = 1000
+	const batchDelay = 5 * time.Millisecond
+	lastReport := time.Now()
 	for i := 0; i < len(programmes); i += batchSize {
 		select {
 		case <-ctx.Done():
@@ -295,6 +305,14 @@ func (r *EpgRepo) SaveEpgProgrammes(ctx context.Context, programmes []client.Epg
 
 		if _, err := r.db.ExecContext(ctx, query, valueArgs...); err != nil {
 			return fmt.Errorf("failed saving epg chunk: %w", err)
+		}
+
+		if onProgress != nil {
+			now := time.Now()
+			if end == len(programmes) || now.Sub(lastReport) >= 1*time.Second {
+				onProgress(end, len(programmes))
+				lastReport = now
+			}
 		}
 
 		if end < len(programmes) {
