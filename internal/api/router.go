@@ -227,15 +227,12 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		}
 		if len(cfg.ExtraRoutes) > 0 {
 			xtreamInfo["status"] = "ok"
-			xtreamInfo["mode"] = "integrated"
 		} else {
 			xtreamURL := os.Getenv("XTREAM_SERVER_URL")
 			if xtreamURL == "" {
 				xtreamURL = os.Getenv("XTREAM_URL")
 			}
 			if xtreamURL != "" {
-				xtreamInfo["mode"] = "remote"
-				xtreamInfo["url"] = xtreamURL
 				if ok, lat, err := pingRemoteHealth(ctx, xtreamURL); ok {
 					xtreamInfo["status"] = "ok"
 					xtreamInfo["latency_ms"] = lat
@@ -248,7 +245,6 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				}
 			} else {
 				xtreamInfo["status"] = "standalone"
-				xtreamInfo["mode"] = "standalone_dashboard"
 			}
 		}
 
@@ -261,8 +257,6 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			redirectURL = os.Getenv("REDIRECT_SERVER_URL")
 		}
 		if redirectURL != "" {
-			redirectorInfo["mode"] = "remote"
-			redirectorInfo["url"] = redirectURL
 			if ok, lat, err := pingRemoteHealth(ctx, redirectURL); ok {
 				redirectorInfo["status"] = "ok"
 				redirectorInfo["latency_ms"] = lat
@@ -275,10 +269,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 			}
 		} else if len(cfg.ExtraRoutes) > 0 {
 			redirectorInfo["status"] = "ok"
-			redirectorInfo["mode"] = "integrated"
 		} else {
 			redirectorInfo["status"] = "standalone"
-			redirectorInfo["mode"] = "standalone_dashboard"
 		}
 
 		overallStatus := "ok"
