@@ -6,6 +6,9 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
+	"os"
+	"strconv"
 	"strings"
 	"time"
 
@@ -42,6 +45,7 @@ func (r *SettingsRepo) EnsureSchema(ctx context.Context) error {
 			last_backup DATETIME NULL,
 			updated_at DATETIME DEFAULT CURRENT_TIMESTAMP ON UPDATE CURRENT_TIMESTAMP
 		) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci`,
+		`ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS playlist_sync_minute_offset INT NOT NULL DEFAULT -1`,
 		`ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS expiry_sync_days_range INT NOT NULL DEFAULT 5`,
 		`ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS iptveditor_api_token VARCHAR(255) NULL`,
 		`ALTER TABLE system_settings ADD COLUMN IF NOT EXISTS tmdb_api_key VARCHAR(255) NULL`,
@@ -129,7 +133,7 @@ func (r *SettingsRepo) EnsureSchema(ctx context.Context) error {
 // Get retrieves the system settings row (id = 1).
 func (r *SettingsRepo) Get(ctx context.Context) (*models.SystemSettings, error) {
 	query := `
-		SELECT id, COALESCE(iptveditor_api_token, ''), COALESCE(tmdb_api_key, ''), playlist_sync_interval_hours, playlist_sync_enabled,
+		SELECT id, COALESCE(iptveditor_api_token, ''), COALESCE(tmdb_api_key, ''), playlist_sync_interval_hours, COALESCE(playlist_sync_minute_offset, -1), playlist_sync_enabled,
 		       expiry_sync_interval_hours, expiry_sync_enabled, expiry_sync_all, COALESCE(expiry_sync_days_range, 5),
 		       backup_interval_hours, backup_enabled, backup_retention_days,
 		       COALESCE(security_log_retention_days, 7),
@@ -213,6 +217,7 @@ func (r *SettingsRepo) Get(ctx context.Context) (*models.SystemSettings, error) 
 		&s.IPTVEditorAPIToken,
 		&s.TMDBApiKey,
 		&s.PlaylistSyncIntervalHours,
+		&s.PlaylistSyncMinuteOffset,
 		&pSyncEnabled,
 		&s.ExpirySyncIntervalHours,
 		&eSyncEnabled,
@@ -280,8 +285,8 @@ func (r *SettingsRepo) Get(ctx context.Context) (*models.SystemSettings, error) 
 		&updatedAt,
 	)
 	if err != nil {
-		if errors.Is(err, sql.ErrNoRows) {
-			// Initialize default and fetch again
+		if errors.Is(err, sql.ErrNoRows) || strings.Contains(err.Error(), "Unknown column") {
+			// Initialize default or apply schema migration and fetch again
 			if initErr := r.EnsureSchema(ctx); initErr != nil {
 				return nil, initErr
 			}
@@ -292,6 +297,23 @@ func (r *SettingsRepo) Get(ctx context.Context) (*models.SystemSettings, error) 
 
 	if s.BackupDownloadMode == "" {
 		s.BackupDownloadMode = "disabled"
+	}
+
+	// Persistent Instance Staggering for Playlist Sync:
+	// If uninitialized (-1) or out of bounds (0-59), generate a persistent random minute offset
+	// and save it permanently into MariaDB.
+	if s.PlaylistSyncMinuteOffset < 0 || s.PlaylistSyncMinuteOffset > 59 {
+		offset := -1
+		if envOffset := os.Getenv("PLAYLIST_SYNC_MINUTE_OFFSET"); envOffset != "" {
+			if v, err := strconv.Atoi(envOffset); err == nil && v >= 0 && v <= 59 {
+				offset = v
+			}
+		}
+		if offset < 0 {
+			offset = rand.New(rand.NewSource(time.Now().UnixNano())).Intn(60)
+		}
+		_, _ = r.db.ExecContext(ctx, "UPDATE system_settings SET playlist_sync_minute_offset = ? WHERE id = 1", offset)
+		s.PlaylistSyncMinuteOffset = offset
 	}
 
 	s.PlaylistSyncEnabled = pSyncEnabled == 1
@@ -592,6 +614,7 @@ func (r *SettingsRepo) Update(ctx context.Context, s *models.SystemSettings) err
 		SET iptveditor_api_token = ?,
 		    tmdb_api_key = ?,
 		    playlist_sync_interval_hours = ?,
+		    playlist_sync_minute_offset = ?,
 		    playlist_sync_enabled = ?,
 		    expiry_sync_interval_hours = ?,
 		    expiry_sync_enabled = ?,
@@ -663,10 +686,22 @@ func (r *SettingsRepo) Update(ctx context.Context, s *models.SystemSettings) err
 	if s.SSLOnDemandEnabled {
 		sslOnDemand = 1
 	}
+	if s.PlaylistSyncMinuteOffset < 0 || s.PlaylistSyncMinuteOffset > 59 {
+		if envOffset := os.Getenv("PLAYLIST_SYNC_MINUTE_OFFSET"); envOffset != "" {
+			if v, err := strconv.Atoi(envOffset); err == nil && v >= 0 && v <= 59 {
+				s.PlaylistSyncMinuteOffset = v
+			}
+		}
+		if s.PlaylistSyncMinuteOffset < 0 || s.PlaylistSyncMinuteOffset > 59 {
+			s.PlaylistSyncMinuteOffset = rand.New(rand.NewSource(time.Now().UnixNano())).Intn(60)
+		}
+	}
+
 	_, err := r.db.ExecContext(ctx, query,
 		s.IPTVEditorAPIToken,
 		s.TMDBApiKey,
 		s.PlaylistSyncIntervalHours,
+		s.PlaylistSyncMinuteOffset,
 		pSync,
 		s.ExpirySyncIntervalHours,
 		eSync,

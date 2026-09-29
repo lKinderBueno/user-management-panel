@@ -8,6 +8,7 @@ type SystemSettingsBackup struct {
 	TMDBApiKey                string `json:"tmdb_api_key,omitempty"`
 	HasToken                  bool   `json:"has_token"`
 	PlaylistSyncIntervalHours int    `json:"playlist_sync_interval_hours"`
+	PlaylistSyncMinuteOffset  int    `json:"playlist_sync_minute_offset,omitempty"`
 	PlaylistSyncEnabled       bool   `json:"playlist_sync_enabled"`
 	ExpirySyncIntervalHours   int    `json:"expiry_sync_interval_hours"`
 	ExpirySyncEnabled         bool   `json:"expiry_sync_enabled"`

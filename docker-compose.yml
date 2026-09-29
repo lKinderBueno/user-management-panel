@@ -97,12 +97,20 @@ services:
       IPTVEDITOR_API_URL: ${IPTVEDITOR_API_URL:-}
       IPTVEDITOR_API_TOKEN: ${IPTVEDITOR_API_TOKEN:-}
       IPTVEDITOR_API_PASSWORD: ${IPTVEDITOR_API_PASSWORD:-}
+      XTREAM_SERVER_URL: http://xtream:8000
+      REDIRECT_SERVER_URL: http://redirector:3100
     secrets:
       - db_password
       - jwt_secret
     volumes:
       - ./data/epg:/data/epg
       - ./backups:/app/backups
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8080/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # ----------------------------------------------------------------------------
   # 4. Closed Source: Xtream Codes Player & Panel API Engine
@@ -134,10 +142,17 @@ services:
       XTREAM_PORT: 8000
       LOG_LEVEL: ${LOG_LEVEL:-info}
       EPG_CACHE_DIR: /data/epg
+      STREAM_SERVER_URL: http://redirector:3100
     secrets:
       - db_password
     volumes:
       - ./data/epg:/data/epg
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:8000/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # ----------------------------------------------------------------------------
   # 5. Closed Source: High-Performance Stream Redirector / Router
@@ -170,6 +185,12 @@ services:
       LOG_LEVEL: ${LOG_LEVEL:-info}
     secrets:
       - db_password
+    healthcheck:
+      test: ["CMD-SHELL", "wget -q --spider http://127.0.0.1:3100/health || exit 1"]
+      interval: 10s
+      timeout: 5s
+      retries: 3
+      start_period: 15s
 
   # ----------------------------------------------------------------------------
   # 6. Closed Source: Background Playlist & EPG Syncer Engine
@@ -230,9 +251,12 @@ services:
       - caddy_data:/data
       - caddy_config:/config
     depends_on:
-      - dashboard
-      - xtream
-      - redirector
+      dashboard:
+        condition: service_healthy
+      xtream:
+        condition: service_healthy
+      redirector:
+        condition: service_healthy
 
 secrets:
   db_password:

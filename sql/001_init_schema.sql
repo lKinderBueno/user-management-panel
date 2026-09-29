@@ -331,6 +331,7 @@ CREATE TABLE IF NOT EXISTS `system_settings` (
     `id` INT PRIMARY KEY DEFAULT 1,
     `iptveditor_api_token` VARCHAR(255) NULL,
     `playlist_sync_interval_hours` INT NOT NULL DEFAULT 6,
+    `playlist_sync_minute_offset` INT NOT NULL DEFAULT -1,
     `playlist_sync_enabled` TINYINT(1) NOT NULL DEFAULT 1,
     `expiry_sync_interval_hours` INT NOT NULL DEFAULT 12,
     `expiry_sync_enabled` TINYINT(1) NOT NULL DEFAULT 1,

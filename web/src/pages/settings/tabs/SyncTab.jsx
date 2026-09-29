@@ -310,6 +310,14 @@ export default function SyncTab({
               <span className="text-xs text-[#8898aa] dark:text-slate-400">hours</span>
             </div>
           </div>
+          {form.playlist_sync_minute_offset !== undefined && (
+            <div className="flex items-center gap-1.5 text-[11px] text-[#8898aa] dark:text-slate-400 pt-0.5">
+              <Clock className="w-3 h-3 text-[#3970e1] dark:text-blue-400 shrink-0" />
+              <span>
+                Instance Staggering: scheduled at <strong>:{String(form.playlist_sync_minute_offset).padStart(2, '0')}</strong> past the hour to prevent server traffic spikes.
+              </span>
+            </div>
+          )}
         </div>
 
         {/* Maximum EPG Days */}

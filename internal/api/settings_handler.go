@@ -197,6 +197,9 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 	if s.PlaylistSyncIntervalHours < 1 {
 		s.PlaylistSyncIntervalHours = 1
 	}
+	if s.PlaylistSyncMinuteOffset < 0 || s.PlaylistSyncMinuteOffset > 59 {
+		s.PlaylistSyncMinuteOffset = existing.PlaylistSyncMinuteOffset
+	}
 	if s.ExpirySyncIntervalHours < 1 {
 		s.ExpirySyncIntervalHours = 1
 	}

@@ -95,6 +95,7 @@ func (s *Service) CreateBackupPayload(ctx context.Context, listID *uint64, backu
 			sysSettingsBackup = &models.SystemSettingsBackup{
 				HasToken:                  tokenIncluded || tmdbIncluded,
 				PlaylistSyncIntervalHours: sys.PlaylistSyncIntervalHours,
+				PlaylistSyncMinuteOffset:  sys.PlaylistSyncMinuteOffset,
 				PlaylistSyncEnabled:       sys.PlaylistSyncEnabled,
 				ExpirySyncIntervalHours:   sys.ExpirySyncIntervalHours,
 				ExpirySyncEnabled:         sys.ExpirySyncEnabled,
@@ -443,6 +444,9 @@ func (s *Service) RestoreFromPayload(ctx context.Context, payload *models.Backup
 		if err == nil && cur != nil {
 			if payload.SystemSettings.PlaylistSyncIntervalHours > 0 {
 				cur.PlaylistSyncIntervalHours = payload.SystemSettings.PlaylistSyncIntervalHours
+			}
+			if payload.SystemSettings.PlaylistSyncMinuteOffset >= 0 && payload.SystemSettings.PlaylistSyncMinuteOffset <= 59 {
+				cur.PlaylistSyncMinuteOffset = payload.SystemSettings.PlaylistSyncMinuteOffset
 			}
 			cur.PlaylistSyncEnabled = payload.SystemSettings.PlaylistSyncEnabled
 			if payload.SystemSettings.ExpirySyncIntervalHours > 0 {

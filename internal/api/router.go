@@ -1,8 +1,10 @@
 package api
 
 import (
+	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"log"
 	"net"
 	"net/http"
@@ -149,6 +151,160 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	authenticator := auth.NewAuthenticator(tokenHandler, secRecorder)
 	auth.SetDefaultAuthenticator(authenticator)
 
+	// pingRemoteHealth checks the health of an external service.
+	pingRemoteHealth := func(ctx context.Context, rawURL string) (bool, int64, error) {
+		rawURL = strings.TrimRight(rawURL, "/")
+		if !strings.HasPrefix(rawURL, "http://") && !strings.HasPrefix(rawURL, "https://") {
+			rawURL = "http://" + rawURL
+		}
+		if !strings.HasSuffix(rawURL, "/health") {
+			rawURL += "/health"
+		}
+		req, err := http.NewRequestWithContext(ctx, http.MethodGet, rawURL, nil)
+		if err != nil {
+			return false, 0, err
+		}
+		httpClient := &http.Client{Timeout: 2 * time.Second}
+		start := time.Now()
+		resp, err := httpClient.Do(req)
+		latency := time.Since(start).Milliseconds()
+		if err != nil {
+			return false, latency, err
+		}
+		defer resp.Body.Close()
+		if resp.StatusCode < 200 || resp.StatusCode >= 300 {
+			return false, latency, fmt.Errorf("HTTP %d", resp.StatusCode)
+		}
+		return true, latency, nil
+	}
+
+	// Health check endpoint (public, unauthenticated)
+	healthHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		ctx, cancel := context.WithTimeout(r.Context(), 3*time.Second)
+		defer cancel()
+
+		allHealthy := true
+
+		// 1. Database Check
+		dbInfo := map[string]any{
+			"status": "ok",
+		}
+		if dbHandle != nil {
+			start := time.Now()
+			if err := dbHandle.PingContext(ctx); err != nil {
+				allHealthy = false
+				dbInfo["status"] = "unhealthy"
+				dbInfo["error"] = err.Error()
+			} else {
+				dbInfo["latency_ms"] = time.Since(start).Milliseconds()
+			}
+		} else {
+			dbInfo["status"] = "not_configured"
+		}
+
+		// 2. Cache / Redis Check
+		cacheInfo := map[string]any{
+			"status": "ok",
+			"type":   "none",
+		}
+		if cfg.Cache != nil {
+			if cfg.Cache.IsAvailable() {
+				cacheInfo["status"] = "ok"
+				cacheInfo["type"] = "redis"
+			} else {
+				cacheInfo["status"] = "degraded"
+				cacheInfo["type"] = "redis"
+				cacheInfo["error"] = "cache backend unreachable"
+			}
+		} else {
+			cacheInfo["status"] = "disabled"
+		}
+
+		// 3. Xtream API Check
+		xtreamInfo := map[string]any{
+			"status": "ok",
+		}
+		if len(cfg.ExtraRoutes) > 0 {
+			xtreamInfo["status"] = "ok"
+			xtreamInfo["mode"] = "integrated"
+		} else {
+			xtreamURL := os.Getenv("XTREAM_SERVER_URL")
+			if xtreamURL == "" {
+				xtreamURL = os.Getenv("XTREAM_URL")
+			}
+			if xtreamURL != "" {
+				xtreamInfo["mode"] = "remote"
+				xtreamInfo["url"] = xtreamURL
+				if ok, lat, err := pingRemoteHealth(ctx, xtreamURL); ok {
+					xtreamInfo["status"] = "ok"
+					xtreamInfo["latency_ms"] = lat
+				} else {
+					allHealthy = false
+					xtreamInfo["status"] = "unhealthy"
+					if err != nil {
+						xtreamInfo["error"] = err.Error()
+					}
+				}
+			} else {
+				xtreamInfo["status"] = "standalone"
+				xtreamInfo["mode"] = "standalone_dashboard"
+			}
+		}
+
+		// 4. Redirector Check
+		redirectorInfo := map[string]any{
+			"status": "ok",
+		}
+		redirectURL := os.Getenv("STREAM_SERVER_URL")
+		if redirectURL == "" {
+			redirectURL = os.Getenv("REDIRECT_SERVER_URL")
+		}
+		if redirectURL != "" {
+			redirectorInfo["mode"] = "remote"
+			redirectorInfo["url"] = redirectURL
+			if ok, lat, err := pingRemoteHealth(ctx, redirectURL); ok {
+				redirectorInfo["status"] = "ok"
+				redirectorInfo["latency_ms"] = lat
+			} else {
+				allHealthy = false
+				redirectorInfo["status"] = "unhealthy"
+				if err != nil {
+					redirectorInfo["error"] = err.Error()
+				}
+			}
+		} else if len(cfg.ExtraRoutes) > 0 {
+			redirectorInfo["status"] = "ok"
+			redirectorInfo["mode"] = "integrated"
+		} else {
+			redirectorInfo["status"] = "standalone"
+			redirectorInfo["mode"] = "standalone_dashboard"
+		}
+
+		overallStatus := "ok"
+		if !allHealthy {
+			overallStatus = "unhealthy"
+			w.WriteHeader(http.StatusServiceUnavailable)
+		} else if cacheInfo["status"] == "degraded" {
+			overallStatus = "degraded"
+			w.WriteHeader(http.StatusOK)
+		} else {
+			w.WriteHeader(http.StatusOK)
+		}
+
+		_ = json.NewEncoder(w).Encode(map[string]any{
+			"status": overallStatus,
+			"components": map[string]any{
+				"database":   dbInfo,
+				"cache":      cacheInfo,
+				"xtream_api": xtreamInfo,
+				"redirector": redirectorInfo,
+			},
+		})
+	}
+	r.Get("/health", healthHandler)
+	r.Get("/health/", healthHandler)
+
 	// Public Documentation Viewer
 	r.Get("/docs", HandleDocs)
 	r.Get("/docs/", HandleDocs)
@@ -162,6 +318,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 
 	// 3. API Routes
 	r.Route("/api", func(r chi.Router) {
+		// Public Health Check
+		r.Get("/health", healthHandler)
+		r.Get("/health/", healthHandler)
+
 		// Public Auth
 		r.Get("/auth/captcha", authHandler.GetCaptcha)
 		r.Post("/auth/login", authHandler.Login)

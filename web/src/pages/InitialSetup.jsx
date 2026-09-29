@@ -545,8 +545,8 @@ export default function InitialSetup({ onSetupComplete }) {
                     log.status === 'success'
                       ? 'text-emerald-400'
                       : log.status === 'skipped'
-                      ? 'text-slate-400'
-                      : 'text-rose-400'
+                        ? 'text-slate-400'
+                        : 'text-rose-400'
                   }>
                     {log.status === 'success' ? '✓' : log.status === 'skipped' ? '—' : '✗'}
                   </span>
@@ -863,11 +863,11 @@ export default function InitialSetup({ onSetupComplete }) {
                       setConnectionSuccess(false);
                       setConnectionTested(false);
                     }}
-                    placeholder="https://api.playlistlabs.io"
+                    placeholder="https://api..."
                     className="w-full h-10 bg-white dark:bg-slate-950 border border-[#dee2e6] dark:border-slate-800 rounded-lg px-3.5 text-sm text-[#495057] dark:text-white placeholder-[#8898aa] dark:placeholder-slate-600 focus:outline-none focus:border-[#3970e1] dark:focus:border-blue-500 font-mono transition shadow-xs"
                   />
                   <p className="text-xs text-[#8898aa] dark:text-slate-500 mt-1">
-                    Enter the base URL including protocol (e.g. <span className="font-mono text-[#525f7f] dark:text-slate-400">https://api.playlistlabs.io</span>).
+                    Enter the base URL including protocol (e.g. <span className="font-mono text-[#525f7f] dark:text-slate-400">https://api.domain.prv</span>).
                   </p>
                 </div>
 

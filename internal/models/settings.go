@@ -14,6 +14,7 @@ type SystemSettings struct {
 	CaptchaSecretKey          string     `json:"captcha_secret_key"`
 	TMDBApiKey                string     `json:"tmdb_api_key"`
 	PlaylistSyncIntervalHours int        `json:"playlist_sync_interval_hours"`
+	PlaylistSyncMinuteOffset  int        `json:"playlist_sync_minute_offset"`
 	PlaylistSyncEnabled       bool       `json:"playlist_sync_enabled"`
 	ExpirySyncIntervalHours   int        `json:"expiry_sync_interval_hours"`
 	ExpirySyncEnabled         bool       `json:"expiry_sync_enabled"`

@@ -6,8 +6,11 @@ import (
 	"errors"
 	"fmt"
 	"log"
+	"math/rand"
 	"net/http"
 	"net/url"
+	"os"
+	"strconv"
 	"strings"
 	"sync"
 	"time"
@@ -187,6 +190,7 @@ type InitializeSetupRequest struct {
 
 	// Sync frequencies (in hours)
 	PlaylistSyncIntervalHours int `json:"playlist_sync_interval_hours"`
+	PlaylistSyncMinuteOffset  int `json:"playlist_sync_minute_offset"`
 	ExpirySyncIntervalHours   int `json:"expiry_sync_interval_hours"`
 
 	// Cache settings
@@ -368,6 +372,18 @@ func (h *SetupHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 		sysSettings.PlaylistSyncIntervalHours = req.PlaylistSyncIntervalHours
 	} else {
 		sysSettings.PlaylistSyncIntervalHours = 6
+	}
+	// Persistent Instance Staggering for Playlist Sync
+	if req.PlaylistSyncMinuteOffset >= 0 && req.PlaylistSyncMinuteOffset <= 59 {
+		sysSettings.PlaylistSyncMinuteOffset = req.PlaylistSyncMinuteOffset
+	} else if envOffset := os.Getenv("PLAYLIST_SYNC_MINUTE_OFFSET"); envOffset != "" {
+		if v, err := strconv.Atoi(envOffset); err == nil && v >= 0 && v <= 59 {
+			sysSettings.PlaylistSyncMinuteOffset = v
+		} else {
+			sysSettings.PlaylistSyncMinuteOffset = rand.New(rand.NewSource(time.Now().UnixNano())).Intn(60)
+		}
+	} else {
+		sysSettings.PlaylistSyncMinuteOffset = rand.New(rand.NewSource(time.Now().UnixNano())).Intn(60)
 	}
 	sysSettings.PlaylistSyncEnabled = true
 

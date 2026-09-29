@@ -49,16 +49,62 @@ func NewScheduler(
 	}
 }
 
+// CalculateNextPlaylistSync determines the next scheduled run and whether a sync is currently due,
+// implementing Persistent Instance Staggering based on the instance's minute offset (0-59).
+func CalculateNextPlaylistSync(now time.Time, intervalHours int, offsetMinutes int, lastSync *time.Time) (time.Time, bool) {
+	if intervalHours <= 0 {
+		intervalHours = 6
+	}
+	if offsetMinutes < 0 || offsetMinutes > 59 {
+		offsetMinutes = 0
+	}
+
+	nowUTC := now.UTC()
+	epochHours := nowUTC.Unix() / 3600
+	slotInterval := int64(intervalHours)
+	currentSlotStartEpochHours := (epochHours / slotInterval) * slotInterval
+
+	currentSlotTime := time.Unix(currentSlotStartEpochHours*3600+int64(offsetMinutes*60), 0).UTC()
+	nextSlotTime := currentSlotTime.Add(time.Duration(intervalHours) * time.Hour)
+	prevSlotTime := currentSlotTime.Add(-time.Duration(intervalHours) * time.Hour)
+
+	var nextRun time.Time
+	var isDue bool
+
+	if nowUTC.Before(currentSlotTime) {
+		// Before the target minute of the current slot
+		nextRun = currentSlotTime
+		// Due only if we missed the previous slot or have never synced
+		if lastSync == nil || lastSync.Before(prevSlotTime) {
+			isDue = true
+		}
+	} else {
+		// At or after the target minute of the current slot
+		nextRun = nextSlotTime
+		// Due if we have not synced yet for this current slot
+		if lastSync == nil || lastSync.Before(currentSlotTime) {
+			isDue = true
+		}
+	}
+
+	return nextRun, isDue
+}
+
 // Start runs the periodic check loop in the background until ctx is cancelled.
 func (s *Scheduler) Start(ctx context.Context) {
 	log.Println("[SCHEDULER] Background scheduler started")
 
-	// Run initial evaluation shortly after startup (after 5 seconds)
+	// Run initial evaluation shortly after startup with persistent staggering delay to prevent boot storms
 	go func() {
+		startupDelay := 5 * time.Second
+		if settings, err := s.settingsRepo.Get(context.Background()); err == nil && settings != nil {
+			// Stagger startup evaluation across instances: 5s base + (offset % 30) seconds
+			startupDelay = 5*time.Second + time.Duration(settings.PlaylistSyncMinuteOffset%30)*time.Second
+		}
 		select {
 		case <-ctx.Done():
 			return
-		case <-time.After(5 * time.Second):
+		case <-time.After(startupDelay):
 			s.CheckAndRun(ctx)
 		}
 	}()
@@ -92,11 +138,10 @@ func (s *Scheduler) CheckAndRun(ctx context.Context) {
 
 	now := time.Now().UTC()
 
-	// 1. Check Playlist Sync
+	// 1. Check Playlist Sync (with Persistent Instance Staggering)
 	if settings.PlaylistSyncEnabled && settings.PlaylistSyncIntervalHours > 0 && s.syncer != nil {
-		interval := time.Duration(settings.PlaylistSyncIntervalHours) * time.Hour
-		needsRun := settings.LastPlaylistSync == nil || now.Sub(*settings.LastPlaylistSync) >= interval
-		if needsRun {
+		nextRun, isDue := CalculateNextPlaylistSync(now, settings.PlaylistSyncIntervalHours, settings.PlaylistSyncMinuteOffset, settings.LastPlaylistSync)
+		if isDue {
 			s.mu.RLock()
 			running := s.pSyncStatus.IsRunning
 			s.mu.RUnlock()
@@ -105,7 +150,8 @@ func (s *Scheduler) CheckAndRun(ctx context.Context) {
 			}
 
 			if !running {
-				log.Printf("[SCHEDULER] Triggering automated playlist sync (interval=%dh)...", settings.PlaylistSyncIntervalHours)
+				log.Printf("[SCHEDULER] Triggering automated playlist sync (interval=%dh, staggered_minute=:%02d, next_scheduled=%s)...",
+					settings.PlaylistSyncIntervalHours, settings.PlaylistSyncMinuteOffset, nextRun.Format("15:04:05"))
 				go func() {
 					_ = s.TriggerPlaylistSync(context.Background(), false)
 				}()
@@ -381,14 +427,10 @@ func (s *Scheduler) GetStatus(ctx context.Context) (*models.SettingsResponse, er
 		}
 	}
 
-	// Calculate NextRun for Playlist Sync
+	// Calculate NextRun for Playlist Sync (with Persistent Instance Staggering)
 	if settings.PlaylistSyncEnabled && settings.PlaylistSyncIntervalHours > 0 {
-		if settings.LastPlaylistSync != nil {
-			next := settings.LastPlaylistSync.Add(time.Duration(settings.PlaylistSyncIntervalHours) * time.Hour)
-			resp.PlaylistSync.NextRun = &next
-		} else {
-			resp.PlaylistSync.NextRun = &now
-		}
+		nextRun, _ := CalculateNextPlaylistSync(now, settings.PlaylistSyncIntervalHours, settings.PlaylistSyncMinuteOffset, settings.LastPlaylistSync)
+		resp.PlaylistSync.NextRun = &nextRun
 	}
 	if settings.LastPlaylistSync != nil {
 		resp.PlaylistSync.LastRun = settings.LastPlaylistSync
