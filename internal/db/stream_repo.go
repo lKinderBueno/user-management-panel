@@ -37,6 +37,7 @@ func (r *StreamRepo) EnsureSchema(ctx context.Context) error {
 		`CREATE INDEX IF NOT EXISTS idx_vods_cat_last_seen ON vods_categories (list_id, last_seen_at)`,
 		`ALTER TABLE series_categories ADD COLUMN IF NOT EXISTS last_seen_at DATETIME(3) NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_series_cat_last_seen ON series_categories (list_id, last_seen_at)`,
+		`ALTER TABLE channels MODIFY epg VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL`,
 	}
 	for _, q := range queries {
 		_, _ = r.db.ExecContext(ctx, q)

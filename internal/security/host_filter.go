@@ -17,7 +17,8 @@ import (
 
 var (
 	legacyStreamPathRegex = regexp.MustCompile(`^/[a-zA-Z0-9_\.\-]+/[a-zA-Z0-9_\.\-]+/[0-9]+(\.[a-zA-Z0-9]+)?$`)
-	redirectorStreamRegex = regexp.MustCompile(`(?i)^/(?:live|movie|series|timeshift)/[^/]+/[^/]+/[^/]+/?$`)
+	redirectorStreamRegex = regexp.MustCompile(`(?i)^/(?:live|movie|series|vods|play)/[^/]+/[^/]+/[^/]+/?$`)
+	timeshiftStreamRegex  = regexp.MustCompile(`(?i)^/timeshift/[^/]+/[^/]+/[^/]+/[^/]+/[^/]+/?$`)
 )
 
 // HostFilter provides thread-safe, nanosecond-latency host and domain isolation between
@@ -162,7 +163,7 @@ func IsStreamingRoute(path string) bool {
 		return true
 	}
 
-	if redirectorStreamRegex.MatchString(p) || legacyStreamPathRegex.MatchString(p) {
+	if redirectorStreamRegex.MatchString(p) || timeshiftStreamRegex.MatchString(p) || legacyStreamPathRegex.MatchString(p) {
 		return true
 	}
 

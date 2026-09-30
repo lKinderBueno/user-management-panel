@@ -77,11 +77,11 @@
 	}
 	redir @web_root_query /?{query}&force_url=1 302
 
-	# 3. Stream Redirector: matches stream playback routes or timeshift.php across all domains
-	# Matches: /(live/)?{username}/{password}/{id}, /{type}/{username}/{password}/{id}, or timeshift.php
+	# 3. Stream Redirector: matches stream playback routes, timeshift routes, or timeshift.php across all domains
+	# Matches: /(live/)?{username}/{password}/{id}, /{type}/{username}/{password}/{id}, /timeshift/*, /streaming/*, or timeshift.php
 	@redirector {
 		not path /api/* /assets/* /static/* /docs/* /users/* /playlists/* /portal-branding/* /info/* /dashboard/* /user-management/* /team/* /collaborators/* /subadmins/* /tokens/* /api-tokens/* /security/* /settings/* /portal/*
-		path_regexp redirector (?i)(?:^/(?:(?:live|movie|series|timeshift|vods|play)/)?[^/]+/[^/]+/[0-9]+(?:\.[a-z0-9]+)?/?$|timeshift\.php)
+		path_regexp redirector (?i)(?:^/(?:(?:live|movie|series|vods|play)/)?[^/]+/[^/]+/[0-9]+(?:\.[a-z0-9]+)?/?$|^/timeshift/|^/streaming/|timeshift\.php)
 	}
 	handle @redirector {
 		reverse_proxy {$REDIRECTOR_UPSTREAM:redirector:3100} {

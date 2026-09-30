@@ -22,6 +22,20 @@ func NewEpgRepo(db *sql.DB) *EpgRepo {
 	return &EpgRepo{db: db}
 }
 
+// EnsureSchema idempotently guarantees that epg_channels and epg_programmes id columns are case-sensitive (COLLATE utf8mb4_bin).
+func (r *EpgRepo) EnsureSchema(ctx context.Context) error {
+	queries := []string{
+		`ALTER TABLE epg_channels MODIFY id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL`,
+		`ALTER TABLE epg_programmes MODIFY id VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL`,
+	}
+	for _, q := range queries {
+		if _, err := r.db.ExecContext(ctx, q); err != nil {
+			log.Printf("[WARN] EnsureSchema epg_repo warning: %v (query: %s)", err, q)
+		}
+	}
+	return nil
+}
+
 // GetChannelsMaxStop returns the precalculated max stop timestamp for all tracked EPG channels.
 func (r *EpgRepo) GetChannelsMaxStop(ctx context.Context) (map[string]time.Time, error) {
 	query := "SELECT id, max_stop FROM epg_channels"
@@ -41,7 +55,20 @@ func (r *EpgRepo) GetChannelsMaxStop(ctx context.Context) (map[string]time.Time,
 			}
 		}
 	}
-	return res, rows.Err()
+	if err := rows.Err(); err != nil {
+		return nil, err
+	}
+
+	// Add lower-case fallback only if no exact match exists
+	for id, stopTime := range res {
+		lowerID := strings.ToLower(id)
+		if lowerID != id {
+			if _, exists := res[lowerID]; !exists {
+				res[lowerID] = stopTime
+			}
+		}
+	}
+	return res, nil
 }
 
 // UpdateChannelsMaxStop updates the max stop timestamp for given EPG channel IDs in epg_channels.

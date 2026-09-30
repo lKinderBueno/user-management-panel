@@ -68,7 +68,7 @@ CREATE TABLE IF NOT EXISTS `channels` (
     `category_id` BIGINT UNSIGNED NOT NULL DEFAULT 0,
     `name` VARCHAR(255) NOT NULL DEFAULT '',
     `position` INT NOT NULL DEFAULT 0,
-    `epg` VARCHAR(255) NULL,
+    `epg` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL,
     `shift` DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
     `number` INT NOT NULL DEFAULT 0,
     `image` TEXT NULL,
@@ -188,7 +188,7 @@ CREATE TABLE IF NOT EXISTS `series_episodes` (
 -- ============================================================================
 
 CREATE TABLE IF NOT EXISTS `epg_programmes` (
-    `id` VARCHAR(255) NOT NULL,
+    `id` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     `start` DATETIME(3) NOT NULL,
     `stop` DATETIME(3) NOT NULL,
     `title` TEXT NULL,
@@ -214,7 +214,7 @@ CREATE TABLE IF NOT EXISTS `epg_programmes` (
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
 CREATE TABLE IF NOT EXISTS `epg_channels` (
-    `id` VARCHAR(255) NOT NULL,
+    `id` VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NOT NULL,
     `name` VARCHAR(255) NULL,
     `lang` VARCHAR(50) NULL,
     `max_stop` DATETIME(3) NULL,
