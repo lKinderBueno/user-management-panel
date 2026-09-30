@@ -142,7 +142,7 @@ services:
       XTREAM_PORT: 8000
       LOG_LEVEL: ${LOG_LEVEL:-info}
       EPG_CACHE_DIR: /data/epg
-      STREAM_SERVER_URL: http://redirector:3100
+      STREAM_SERVER_URL: ${STREAM_SERVER_URL:-}
     secrets:
       - db_password
     volumes:
