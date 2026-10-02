@@ -41,6 +41,19 @@
   margin: 0 !important;
 }
 
+/* Prevent native text and cell selection in user management data grid */
+.managed-users-grid,
+.managed-users-grid table,
+.managed-users-grid tbody,
+.managed-users-grid tr,
+.managed-users-grid td,
+.managed-users-grid th {
+  -webkit-user-select: none !important;
+  -moz-user-select: none !important;
+  -ms-user-select: none !important;
+  user-select: none !important;
+}
+
 /* PlaylistLabs style scrollbars */
 * {
   scrollbar-color: #cbd5e1 transparent;

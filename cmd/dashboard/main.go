@@ -75,6 +75,11 @@ func main() {
 		log.Printf("[WARN] Failed ensuring playlist database schema: %v", err)
 	}
 
+	streamRepo := db.NewStreamRepo(database)
+	if err := streamRepo.EnsureSchema(ctx); err != nil {
+		log.Printf("[WARN] Failed ensuring stream database schema: %v", err)
+	}
+
 	if err := adminRepo.EnsureSchema(ctx); err != nil {
 		log.Printf("[WARN] Failed ensuring database schema: %v", err)
 	}

@@ -161,3 +161,46 @@ func ContainsCategoryID(list []uint64, id uint64) bool {
 	}
 	return false
 }
+
+// ParseCategoryIDsJSON parses a JSON string containing an array of category IDs (integers or numeric strings) into []uint64.
+// Returns nil if raw is empty, "null", "[]", or invalid.
+func ParseCategoryIDsJSON(raw string) []uint64 {
+	trimmed := strings.TrimSpace(raw)
+	if trimmed == "" || trimmed == "null" || trimmed == "[]" {
+		return nil
+	}
+	var rawItems []any
+	if err := json.Unmarshal([]byte(trimmed), &rawItems); err != nil {
+		return nil
+	}
+	if len(rawItems) == 0 {
+		return nil
+	}
+	ids := make([]uint64, 0, len(rawItems))
+	for _, item := range rawItems {
+		switch val := item.(type) {
+		case float64:
+			if val >= 0 {
+				ids = append(ids, uint64(val))
+			}
+		case int:
+			if val >= 0 {
+				ids = append(ids, uint64(val))
+			}
+		case int64:
+			if val >= 0 {
+				ids = append(ids, uint64(val))
+			}
+		case string:
+			if id, err := strconv.ParseUint(strings.TrimSpace(val), 10, 64); err == nil {
+				ids = append(ids, id)
+			}
+		case json.Number:
+			if id, err := strconv.ParseUint(string(val), 10, 64); err == nil {
+				ids = append(ids, id)
+			}
+		}
+	}
+	return ids
+}
+

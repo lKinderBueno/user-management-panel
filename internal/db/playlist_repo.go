@@ -277,3 +277,13 @@ func (r *PlaylistRepo) ResetAllTimestamps(ctx context.Context) error {
 	return err
 }
 
+// GetMaxEpgDays returns the highest epg_days configured across active (non-orphaned) playlists.
+func (r *PlaylistRepo) GetMaxEpgDays(ctx context.Context) (int, error) {
+	var maxDays sql.NullInt64
+	err := r.db.QueryRowContext(ctx, "SELECT MAX(epg_days) FROM playlists WHERE is_orphaned = 0").Scan(&maxDays)
+	if err != nil || !maxDays.Valid {
+		return 0, err
+	}
+	return int(maxDays.Int64), nil
+}
+

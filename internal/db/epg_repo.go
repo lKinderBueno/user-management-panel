@@ -36,23 +36,35 @@ func (r *EpgRepo) EnsureSchema(ctx context.Context) error {
 	return nil
 }
 
-// GetChannelsMaxStop returns the precalculated max stop timestamp for all tracked EPG channels.
-func (r *EpgRepo) GetChannelsMaxStop(ctx context.Context) (map[string]time.Time, error) {
-	query := "SELECT id, max_stop FROM epg_channels"
+// ChannelSyncInfo holds the latest programme stop and last sync timestamp for an EPG channel.
+type ChannelSyncInfo struct {
+	MaxStop   time.Time
+	UpdatedAt time.Time
+}
+
+// GetChannelsSyncInfo returns the precalculated max stop and updated_at timestamps for all tracked EPG channels.
+func (r *EpgRepo) GetChannelsSyncInfo(ctx context.Context) (map[string]ChannelSyncInfo, error) {
+	query := "SELECT id, max_stop, updated_at FROM epg_channels"
 	rows, err := r.db.QueryContext(ctx, query)
 	if err != nil {
-		return nil, fmt.Errorf("failed querying epg_channels max_stop: %w", err)
+		return nil, fmt.Errorf("failed querying epg_channels sync info: %w", err)
 	}
 	defer rows.Close()
 
-	res := make(map[string]time.Time)
+	res := make(map[string]ChannelSyncInfo)
 	for rows.Next() {
 		var id string
 		var maxStop sql.NullTime
-		if err := rows.Scan(&id, &maxStop); err == nil {
+		var updatedAt sql.NullTime
+		if err := rows.Scan(&id, &maxStop, &updatedAt); err == nil {
+			info := ChannelSyncInfo{}
 			if maxStop.Valid {
-				res[id] = maxStop.Time
+				info.MaxStop = maxStop.Time
 			}
+			if updatedAt.Valid {
+				info.UpdatedAt = updatedAt.Time
+			}
+			res[id] = info
 		}
 	}
 	if err := rows.Err(); err != nil {
@@ -60,14 +72,127 @@ func (r *EpgRepo) GetChannelsMaxStop(ctx context.Context) (map[string]time.Time,
 	}
 
 	// Add lower-case fallback only if no exact match exists
-	for id, stopTime := range res {
+	for id, info := range res {
 		lowerID := strings.ToLower(id)
 		if lowerID != id {
 			if _, exists := res[lowerID]; !exists {
-				res[lowerID] = stopTime
+				res[lowerID] = info
 			}
 		}
 	}
+	return res, nil
+}
+
+// GetChannelsMaxStop returns the precalculated max stop timestamp for all tracked EPG channels.
+func (r *EpgRepo) GetChannelsMaxStop(ctx context.Context) (map[string]time.Time, error) {
+	infoMap, err := r.GetChannelsSyncInfo(ctx)
+	if err != nil {
+		return nil, err
+	}
+	res := make(map[string]time.Time, len(infoMap))
+	for id, info := range infoMap {
+		if !info.MaxStop.IsZero() {
+			res[id] = info.MaxStop
+		}
+	}
+	return res, nil
+}
+
+// TouchChannelsUpdatedAt updates updated_at timestamp to CURRENT_TIMESTAMP(3) for the given EPG channel IDs.
+func (r *EpgRepo) TouchChannelsUpdatedAt(ctx context.Context, ids []string) error {
+	if len(ids) == 0 {
+		return nil
+	}
+	const batchSize = 1000
+	for i := 0; i < len(ids); i += batchSize {
+		end := i + batchSize
+		if end > len(ids) {
+			end = len(ids)
+		}
+		chunk := ids[i:end]
+
+		placeholders := make([]string, len(chunk))
+		args := make([]interface{}, len(chunk))
+		for j, id := range chunk {
+			placeholders[j] = "?"
+			args[j] = id
+		}
+
+		query := fmt.Sprintf("UPDATE epg_channels SET updated_at = CURRENT_TIMESTAMP(3) WHERE id IN (%s)", strings.Join(placeholders, ","))
+		if _, err := r.db.ExecContext(ctx, query, args...); err != nil {
+			return fmt.Errorf("failed touching epg_channels updated_at: %w", err)
+		}
+	}
+	return nil
+}
+
+// SetChannelsUpdatedAt sets specific updated_at timestamps for given EPG channels (useful for tests or migrations).
+func (r *EpgRepo) SetChannelsUpdatedAt(ctx context.Context, timestamps map[string]time.Time) error {
+	for id, t := range timestamps {
+		if _, err := r.db.ExecContext(ctx, "UPDATE epg_channels SET updated_at = ? WHERE id = ?", t, id); err != nil {
+			return fmt.Errorf("failed setting epg_channels updated_at for %s: %w", id, err)
+		}
+	}
+	return nil
+}
+
+// GetChannelsMinStart returns a map of epg_id -> earliest programme start time recorded in epg_programmes.
+// It also populates lowercase fallback keys if not present.
+func (r *EpgRepo) GetChannelsMinStart(ctx context.Context, epgIDs []string) (map[string]time.Time, error) {
+	res := make(map[string]time.Time)
+	if len(epgIDs) == 0 {
+		return res, nil
+	}
+
+	const batchSize = 1000
+	for i := 0; i < len(epgIDs); i += batchSize {
+		end := i + batchSize
+		if end > len(epgIDs) {
+			end = len(epgIDs)
+		}
+		chunk := epgIDs[i:end]
+
+		placeholders := make([]string, len(chunk))
+		args := make([]interface{}, len(chunk))
+		for j, id := range chunk {
+			placeholders[j] = "?"
+			args[j] = id
+		}
+
+		query := fmt.Sprintf(`
+			SELECT id, MIN(start)
+			FROM epg_programmes
+			WHERE id IN (%s)
+			GROUP BY id
+		`, strings.Join(placeholders, ","))
+
+		rows, err := r.db.QueryContext(ctx, query, args...)
+		if err != nil {
+			return nil, fmt.Errorf("failed querying channels min start: %w", err)
+		}
+
+		for rows.Next() {
+			var id string
+			var minStart sql.NullTime
+			if err := rows.Scan(&id, &minStart); err == nil {
+				if minStart.Valid {
+					res[id] = minStart.Time
+				}
+			}
+		}
+		rows.Close()
+	}
+
+	// Add lower-case fallback only if no exact match exists
+	for id, startTime := range res {
+		lowerID := strings.ToLower(id)
+		if lowerID != id {
+			if _, exists := res[lowerID]; !exists {
+				res[lowerID] = startTime
+			}
+		}
+	}
+
 	return res, nil
 }
 

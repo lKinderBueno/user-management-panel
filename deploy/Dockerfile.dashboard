@@ -9,12 +9,23 @@ RUN npm run build
 # Stage 2: Build Go Dashboard Server using native Go cross-compilation
 FROM --platform=$BUILDPLATFORM golang:alpine AS go-builder
 ARG TARGETARCH
+ARG USE_GARBLE=false
 WORKDIR /app
+RUN if [ "$USE_GARBLE" = "true" ]; then \
+        apk add --no-cache git && \
+        go install mvdan.cc/garble@latest; \
+    fi
 COPY go.mod go.sum ./
 RUN go mod download
 COPY . .
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /app/dashboard ./cmd/dashboard
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=$TARGETARCH go build -ldflags="-s -w" -o /usr/local/bin/reset_password ./cmd/reset_password
+RUN if [ -n "$TARGETARCH" ]; then export GOARCH="$TARGETARCH"; fi; \
+    if [ "$USE_GARBLE" = "true" ]; then \
+        CGO_ENABLED=0 GOOS=linux garble -literals -tiny build -ldflags="-s -w" -trimpath -o /app/dashboard ./cmd/dashboard && \
+        CGO_ENABLED=0 GOOS=linux garble -literals -tiny build -ldflags="-s -w" -trimpath -o /usr/local/bin/reset_password ./cmd/reset_password; \
+    else \
+        CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /app/dashboard ./cmd/dashboard && \
+        CGO_ENABLED=0 GOOS=linux go build -ldflags="-s -w" -o /usr/local/bin/reset_password ./cmd/reset_password; \
+    fi
 
 # Stage 3: Final Production Image
 FROM alpine:3.20

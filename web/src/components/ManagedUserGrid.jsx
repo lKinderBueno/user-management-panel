@@ -194,15 +194,121 @@ export default function ManagedUserGrid({
   const [draggedColId, setDraggedColId] = React.useState(null);
   const [dropTarget, setDropTarget] = React.useState(null); // { id: string, position: 'left' | 'right' }
 
-  // Last clicked ID for Shift-Click range selection
+  // Last clicked ID for Shift-Click range selection anchor (state + ref for zero-latency)
   const [lastClickedId, setLastClickedId] = React.useState(null);
+  const lastClickedIdRef = React.useRef(null);
 
   // Scroll container refs for virtualization
   const tableContainerRef = React.useRef(null);
   const compactContainerRef = React.useRef(null);
+  const rowsRef = React.useRef([]);
 
   // Quick lookup set for O(1) row selection check (supports 2000+ users seamlessly)
   const selectedSet = React.useMemo(() => new Set((selectedUserIds || []).map(String)), [selectedUserIds]);
+
+  const getAnchorIndex = React.useCallback((currentRows) => {
+    const list = (currentRows && currentRows.length > 0) ? currentRows : (rowsRef.current || []);
+    if (list.length === 0) return -1;
+
+    const anchorId = lastClickedIdRef.current ?? lastClickedId;
+    if (anchorId != null) {
+      const idx = list.findIndex((r) => String(r.original?.id) === String(anchorId));
+      if (idx !== -1) return idx;
+    }
+    if (activeUserId != null) {
+      const idx = list.findIndex((r) => String(r.original?.id) === String(activeUserId));
+      if (idx !== -1) return idx;
+    }
+    if (selectedUserIds && selectedUserIds.length > 0) {
+      const idx = list.findIndex((r) => String(r.original?.id) === String(selectedUserIds[0]));
+      if (idx !== -1) return idx;
+    }
+    return 0;
+  }, [lastClickedId, activeUserId, selectedUserIds]);
+
+  const handleRowMouseDown = (e) => {
+    if (e.shiftKey || e.ctrlKey || e.metaKey) {
+      // Prevent browser from initiating native text/cell selection highlight
+      e.preventDefault();
+    }
+  };
+
+  const handleCheckboxClick = React.useCallback((u, e, rowIndex) => {
+    if (!u) return;
+
+    try {
+      window.getSelection()?.removeAllRanges();
+    } catch (err) {}
+
+    if (e.shiftKey) {
+      const currentRows = rowsRef.current || [];
+      const anchorIdx = getAnchorIndex(currentRows);
+      const currIdx = (rowIndex !== undefined && rowIndex >= 0)
+        ? rowIndex
+        : currentRows.findIndex((r) => String(r.original?.id) === String(u.id));
+      if (anchorIdx !== -1 && currIdx !== -1 && currentRows.length > 0) {
+        const start = Math.min(anchorIdx, currIdx);
+        const end = Math.max(anchorIdx, currIdx);
+        const rangeIds = currentRows.slice(start, end + 1).map((r) => r.original?.id).filter((id) => id != null);
+        const isAdditive = e.ctrlKey || e.metaKey;
+        onToggleSelectId(u.id, e, rangeIds, isAdditive);
+        if (onSelectUser) onSelectUser(u);
+        return;
+      }
+    }
+
+    lastClickedIdRef.current = u.id;
+    setLastClickedId(u.id);
+    onToggleSelectId(u.id, e);
+    if (onSelectUser) onSelectUser(u);
+  }, [getAnchorIndex, onToggleSelectId, onSelectUser]);
+
+  const handleRowClick = React.useCallback((u, e, rowIndex) => {
+    if (!u) return;
+
+    try {
+      window.getSelection()?.removeAllRanges();
+    } catch (err) {}
+
+    const currentRows = rowsRef.current || [];
+    const currIdx = (rowIndex !== undefined && rowIndex >= 0)
+      ? rowIndex
+      : currentRows.findIndex((r) => String(r.original?.id) === String(u.id));
+
+    // 1. Shift + click: range selection between anchor and current row
+    if (e.shiftKey) {
+      const anchorIdx = getAnchorIndex(currentRows);
+      if (anchorIdx !== -1 && currIdx !== -1 && currentRows.length > 0) {
+        const start = Math.min(anchorIdx, currIdx);
+        const end = Math.max(anchorIdx, currIdx);
+        const rangeIds = currentRows.slice(start, end + 1).map((r) => r.original?.id).filter((id) => id != null);
+        const isAdditive = e.ctrlKey || e.metaKey;
+        onToggleSelectId(u.id, e, rangeIds, isAdditive);
+        if (onSelectUser) onSelectUser(u);
+        return;
+      }
+    }
+
+    // 2. Ctrl / Cmd + click: toggle row in multi-selection
+    if (e.ctrlKey || e.metaKey) {
+      lastClickedIdRef.current = u.id;
+      setLastClickedId(u.id);
+      onToggleSelectId(u.id, e);
+      if (onSelectUser) onSelectUser(u);
+      return;
+    }
+
+    // 3. Normal click outside checkbox:
+    // Selects ONLY this clicked row and unchecks others
+    lastClickedIdRef.current = u.id;
+    setLastClickedId(u.id);
+    if (onSelectOnlyUser) {
+      onSelectOnlyUser(u.id);
+    } else {
+      onToggleSelectId(u.id, e, [u.id], false);
+    }
+    if (onSelectUser) onSelectUser(u);
+  }, [getAnchorIndex, onToggleSelectId, onSelectOnlyUser, onSelectUser]);
 
   // Status renderers
   const renderStatus = (expiry, user) => {
@@ -396,26 +502,33 @@ export default function ManagedUserGrid({
             checked={isAllSelected}
             onChange={() => onSelectAllVisible(users)}
             className="rounded border-[#dee2e6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#3970e1] focus:ring-0 cursor-pointer"
-            title={isAllSelected ? 'Deselect all visible' : 'Select all visible'}
+            title={isAllSelected ? 'Deselect all visible' : 'Select all visible (Ctrl+A)'}
           />
         </div>
       ),
-      cell: ({ row }) => (
-        <div 
-          className="text-center"
-          onClick={(e) => {
-            e.stopPropagation();
-            onToggleSelectId(row.original.id, e);
-          }}
-        >
-          <input
-            type="checkbox"
-            checked={selectedSet.has(String(row.original.id))}
-            onChange={() => {}}
-            className="rounded border-[#dee2e6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#3970e1] focus:ring-0 cursor-pointer"
-          />
-        </div>
-      )
+      cell: ({ row }) => {
+        const u = row.original;
+        const isChecked = selectedSet.has(String(u.id));
+        return (
+          <div 
+            className="text-center cursor-pointer py-1 select-none"
+            onMouseDown={(e) => {
+              if (e.shiftKey || e.ctrlKey || e.metaKey) e.preventDefault();
+            }}
+            onClick={(e) => {
+              e.stopPropagation();
+              handleCheckboxClick(u, e, row.index);
+            }}
+          >
+            <input
+              type="checkbox"
+              checked={isChecked}
+              readOnly
+              className="rounded border-[#dee2e6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#3970e1] focus:ring-0 pointer-events-none cursor-pointer"
+            />
+          </div>
+        );
+      }
     },
     {
       id: 'id',
@@ -509,14 +622,17 @@ export default function ManagedUserGrid({
         const cleanToken = u.m3u.replace(/^\//, '');
         const shortUrl = `${origin}/${cleanToken}/`;
         return (
-          <div className="flex items-center gap-1 font-mono text-[13px] text-[#525f7f] dark:text-slate-300 pr-1" onClick={(e) => e.stopPropagation()}>
+          <div className="flex items-center gap-1 font-mono text-[13px] text-[#525f7f] dark:text-slate-300 pr-1">
             <span className="truncate max-w-[85px] font-semibold text-[#32325d] dark:text-slate-100" title={`Short M3U: ${shortUrl}`}>
               /{cleanToken}/
             </span>
             <CopyButton text={shortUrl} label="Short M3U" className="opacity-60 hover:opacity-100" />
             <button
               type="button"
-              onClick={() => (onShowInfo || onShowM3u)?.(u)}
+              onClick={(e) => {
+                e.stopPropagation();
+                (onShowInfo || onShowM3u)?.(u);
+              }}
               className="p-1 text-[#8898aa] dark:text-slate-400 hover:text-[#3970e1] dark:hover:text-blue-400 hover:bg-[#eef2ff] dark:hover:bg-slate-700 rounded transition shrink-0"
               title="Streaming links & info"
             >
@@ -557,7 +673,7 @@ export default function ManagedUserGrid({
         }
 
         return (
-          <div className="space-y-1 pr-2" onClick={(e) => e.stopPropagation()}>
+          <div className="space-y-1 pr-2">
             <div className="flex items-center gap-1.5 flex-wrap">
               <span className="text-[12px] font-mono uppercase px-1.5 py-0.5 rounded bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-300 border border-[#3970e1]/30 dark:border-blue-700/40 font-bold">
                 {pattern.type || 'provider'}
@@ -791,7 +907,8 @@ export default function ManagedUserGrid({
     onDeleteUser,
     onToggleSuspension,
     currentPlaylist,
-    playlists
+    playlists,
+    handleCheckboxClick
   ]);
 
   // Table instance
@@ -815,6 +932,7 @@ export default function ManagedUserGrid({
   });
 
   const { rows } = table.getRowModel();
+  rowsRef.current = rows;
   const isResizingAnyColumn = !!table.getState().columnSizingInfo?.isResizingColumn;
 
   // Persist column preferences on change (debounced and only when NOT actively dragging a resize border)
@@ -849,16 +967,26 @@ export default function ManagedUserGrid({
     return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [showColumnMenu]);
 
-  // Global Escape key listener to clear multi-selection
+  // Global keyboard listeners: Escape to clear multi-selection & Ctrl+A to select all visible users
   React.useEffect(() => {
     const handleKeyDown = (e) => {
       if (e.key === 'Escape' && selectedUserIds.length > 0) {
         onClearSelection ? onClearSelection() : onToggleSelectId?.(null, null, []);
+        return;
+      }
+
+      if ((e.ctrlKey || e.metaKey) && (e.key === 'a' || e.key === 'A')) {
+        const activeTag = document.activeElement?.tagName?.toLowerCase();
+        if (activeTag === 'input' || activeTag === 'textarea' || document.activeElement?.isContentEditable) {
+          return;
+        }
+        e.preventDefault();
+        onSelectAllVisible?.(users);
       }
     };
     window.addEventListener('keydown', handleKeyDown);
     return () => window.removeEventListener('keydown', handleKeyDown);
-  }, [selectedUserIds, onClearSelection, onToggleSelectId]);
+  }, [selectedUserIds, users, onClearSelection, onToggleSelectId, onSelectAllVisible]);
 
   const toggleRevealPassword = (id, e) => {
     e.stopPropagation();
@@ -1003,45 +1131,6 @@ export default function ManagedUserGrid({
     setDropTarget(null);
   };
 
-  // Row click dispatcher (automatic checkbox selection & multi-selection handling)
-  const handleRowClick = (u, e, rowIndex) => {
-    // 1. If user is selecting text to copy, don't trigger row selection
-    const selection = window.getSelection();
-    if (selection && selection.toString().trim().length > 0) {
-      return;
-    }
-
-    // 2. Ctrl / Cmd + click: toggle row selection in bulk
-    if (e.ctrlKey || e.metaKey) {
-      onToggleSelectId(u.id, e);
-      setLastClickedId(u.id);
-      if (onSelectUser) onSelectUser(u);
-      return;
-    }
-
-    // 3. Shift + click: range selection between lastClickedId and current row
-    if (e.shiftKey && lastClickedId != null) {
-      const lastIndex = rows.findIndex((r) => r.original.id === lastClickedId);
-      if (lastIndex !== -1 && rowIndex !== -1) {
-        const start = Math.min(lastIndex, rowIndex);
-        const end = Math.max(lastIndex, rowIndex);
-        const rangeIds = rows.slice(start, end + 1).map((r) => r.original.id);
-        onToggleSelectId(u.id, e, rangeIds);
-        if (onSelectUser) onSelectUser(u);
-        return;
-      }
-    }
-
-    // 4. Normal click outside checkbox:
-    // Selects ONLY this clicked row and unchecks all other rows
-    setLastClickedId(u.id);
-    if (onSelectOnlyUser) {
-      onSelectOnlyUser(u.id);
-    } else {
-      onToggleSelectId(u.id, e, [u.id]);
-    }
-    if (onSelectUser) onSelectUser(u);
-  };
 
   const handleRowDoubleClick = (u) => {
     const selection = window.getSelection();
@@ -1072,9 +1161,9 @@ export default function ManagedUserGrid({
       : 0;
 
     return (
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-[#e9ecef] dark:border-slate-800 shadow-argon overflow-hidden">
-        <div ref={compactContainerRef} className="max-h-[calc(100vh-240px)] overflow-y-auto">
-          <table className="w-full text-left text-xs border-collapse">
+      <div className="managed-users-grid select-none bg-white dark:bg-slate-900 rounded-lg border border-[#e9ecef] dark:border-slate-800 shadow-argon overflow-hidden">
+        <div ref={compactContainerRef} className="max-h-[calc(100vh-240px)] overflow-y-auto select-none">
+          <table className="w-full text-left text-xs border-collapse select-none">
             <thead className="bg-[#f6f9fc] dark:bg-slate-800 border-b border-[#e9ecef] dark:border-slate-700 text-[12px] uppercase text-[#8898aa] dark:text-slate-400 font-bold tracking-wider sticky top-0 z-10 select-none">
               <tr>
                 <th className="p-2.5 w-8 text-center">
@@ -1128,10 +1217,10 @@ export default function ManagedUserGrid({
                 </th>
               </tr>
             </thead>
-            <tbody className="divide-y divide-[#e9ecef] dark:divide-slate-800">
+            <tbody className="divide-y divide-[#e9ecef] dark:divide-slate-800 select-none">
               {rows.length === 0 ? (
                 <tr>
-                  <td colSpan={5} className="py-12 text-center text-xs text-[#8898aa] dark:text-slate-400">
+                  <td colSpan={5} className="py-12 text-center text-xs text-[#8898aa] dark:text-slate-400 select-none">
                     No users found
                   </td>
                 </tr>
@@ -1151,31 +1240,35 @@ export default function ManagedUserGrid({
                     return (
                       <tr
                         key={u.id}
+                        onMouseDown={handleRowMouseDown}
                         onClick={(e) => handleRowClick(u, e, virtualRow.index)}
                         onDoubleClick={() => handleRowDoubleClick(u)}
-                        className={`cursor-pointer transition-colors duration-100 ${
+                        className={`cursor-pointer transition-colors duration-100 select-none ${
                           isActive
                             ? 'bg-[#eef2ff] dark:bg-blue-950/50 text-[#32325d] dark:text-blue-300 border-l-4 !border-l-[#3970e1] font-semibold'
                             : isSelected
-                            ? 'bg-[#f8f9fe] dark:bg-slate-800/80 text-[#525f7f] dark:text-slate-200 border-l-4 !border-l-[#adb5bd] dark:!border-l-slate-600'
+                            ? 'bg-[#f0f4ff] dark:bg-blue-950/30 text-[#32325d] dark:text-slate-100 border-l-4 !border-l-[#3970e1]/60 dark:!border-l-blue-500'
                             : 'hover:bg-[#f6f9fc] dark:hover:bg-slate-800/50 text-[#525f7f] dark:text-slate-300 border-l-4 !border-l-[#e9ecef] dark:!border-l-slate-800'
                         }`}
                       >
                         <td 
-                          className="p-2.5 text-center"
+                          className="p-2.5 text-center cursor-pointer select-none"
+                          onMouseDown={(e) => {
+                            if (e.shiftKey || e.ctrlKey || e.metaKey) e.preventDefault();
+                          }}
                           onClick={(e) => {
                             e.stopPropagation();
-                            onToggleSelectId(u.id, e);
+                            handleCheckboxClick(u, e, virtualRow.index);
                           }}
                         >
                           <input
                             type="checkbox"
                             checked={isSelected}
-                            onChange={() => {}}
-                            className="rounded border-[#dee2e6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#3970e1] focus:ring-0 cursor-pointer"
+                            readOnly
+                            className="rounded border-[#dee2e6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#3970e1] focus:ring-0 pointer-events-none cursor-pointer"
                           />
                         </td>
-                        <td className="p-2.5 font-mono text-[13px] text-[#8898aa] dark:text-slate-400">
+                        <td className="p-2.5 font-mono text-[13px] text-[#8898aa] dark:text-slate-400 select-none">
                           {u.id}
                         </td>
                         <td className="p-2.5 min-w-0">
@@ -1276,7 +1369,7 @@ export default function ManagedUserGrid({
             </div>
           ) : (
             <span className="text-[13px]">
-              Tip: <strong>Click</strong> row to select • <strong>Double-click</strong> to edit • <strong>Header</strong> to sort • <strong>Borders</strong> to resize
+              Tip: <strong>Click</strong> to select • <strong>Ctrl+Click</strong> / <strong>Shift+Click</strong> to multi-select • <strong>Double-click</strong> to edit • <strong>Header</strong> to sort
             </span>
           )}
         </div>
@@ -1356,10 +1449,10 @@ export default function ManagedUserGrid({
       </div>
 
       {/* Main Table Card */}
-      <div className="bg-white dark:bg-slate-900 rounded-lg border border-[#e9ecef] dark:border-slate-800 shadow-argon overflow-hidden">
+      <div className="managed-users-grid select-none bg-white dark:bg-slate-900 rounded-lg border border-[#e9ecef] dark:border-slate-800 shadow-argon overflow-hidden">
         <div 
           ref={tableContainerRef} 
-          className="w-full overflow-auto max-h-[calc(100vh-270px)] min-h-[300px]"
+          className="w-full overflow-auto max-h-[calc(100vh-270px)] min-h-[300px] select-none"
         >
           <table 
             style={{ 
@@ -1367,7 +1460,7 @@ export default function ManagedUserGrid({
               minWidth: '100%',
               tableLayout: 'fixed'
             }} 
-            className="text-left text-xs border-collapse"
+            className="text-left text-xs border-collapse select-none"
           >
             {/* Explicit Colgroup for pixel-perfect column sizing */}
             <colgroup>
@@ -1484,12 +1577,12 @@ export default function ManagedUserGrid({
             </thead>
 
             {/* Virtualized Table Body */}
-            <tbody className="divide-y divide-[#e9ecef] dark:divide-slate-800">
+            <tbody className="divide-y divide-[#e9ecef] dark:divide-slate-800 select-none">
               {rows.length === 0 ? (
                 <tr>
                   <td 
                     colSpan={visibleLeafColumns.length} 
-                    className="py-16 text-center text-xs text-[#8898aa] dark:text-slate-400 space-y-2"
+                    className="py-16 text-center text-xs text-[#8898aa] dark:text-slate-400 space-y-2 select-none"
                   >
                     <Users className="w-8 h-8 mx-auto text-[#adb5bd] dark:text-slate-500 stroke-[1.5]" />
                     <p>No managed users match the specified criteria</p>
@@ -1514,13 +1607,14 @@ export default function ManagedUserGrid({
                     return (
                       <tr
                         key={u.id}
+                        onMouseDown={handleRowMouseDown}
                         onClick={(e) => handleRowClick(u, e, virtualRow.index)}
                         onDoubleClick={() => handleRowDoubleClick(u)}
-                        className={`cursor-pointer transition-colors duration-100 ${
+                        className={`cursor-pointer transition-colors duration-100 select-none ${
                           isActive
                             ? 'bg-[#eef2ff] dark:bg-blue-950/50 text-[#32325d] dark:text-blue-300 border-l-4 !border-l-[#3970e1] font-semibold'
                             : isSelected
-                            ? 'bg-[#f8f9fe] dark:bg-slate-800/80 text-[#525f7f] dark:text-slate-200 border-l-4 !border-l-[#adb5bd] dark:!border-l-slate-600'
+                            ? 'bg-[#f0f4ff] dark:bg-blue-950/30 text-[#32325d] dark:text-slate-100 border-l-4 !border-l-[#3970e1]/60 dark:!border-l-blue-500'
                             : 'hover:bg-[#f6f9fc] dark:hover:bg-slate-800/50 text-[#525f7f] dark:text-slate-300 border-l-4 !border-l-[#e9ecef] dark:!border-l-slate-800'
                         }`}
                       >
@@ -1528,7 +1622,7 @@ export default function ManagedUserGrid({
                           <td
                             key={cell.id}
                             style={{ width: `${cell.column.getSize()}px` }}
-                            className="py-3 px-3 overflow-hidden text-ellipsis align-middle"
+                            className="py-3 px-3 overflow-hidden text-ellipsis align-middle select-none"
                           >
                             {flexRender(cell.column.columnDef.cell, cell.getContext())}
                           </td>

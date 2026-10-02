@@ -4,6 +4,7 @@ import (
 	"context"
 	"database/sql"
 	"fmt"
+	"log"
 	"strings"
 	"time"
 
@@ -38,9 +39,26 @@ func (r *StreamRepo) EnsureSchema(ctx context.Context) error {
 		`ALTER TABLE series_categories ADD COLUMN IF NOT EXISTS last_seen_at DATETIME(3) NULL`,
 		`CREATE INDEX IF NOT EXISTS idx_series_cat_last_seen ON series_categories (list_id, last_seen_at)`,
 		`ALTER TABLE channels MODIFY epg VARCHAR(255) CHARACTER SET utf8mb4 COLLATE utf8mb4_bin NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_channels_cat_list_pos ON channels_categories (list_id, position, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_channels_list_cat_pos ON channels (list_id, category_id, position, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_channels_list_pos ON channels (list_id, position, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_vods_cat_list_pos ON vods_categories (list_id, position, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_vods_list_cat_pos ON vods (list_id, category_id, position, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_vods_list_pos ON vods (list_id, position, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_series_cat_list_pos ON series_categories (list_id, position, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_series_list_cat_pos ON series (list_id, category_id, position, id)`,
+		`CREATE INDEX IF NOT EXISTS idx_series_list_pos ON series (list_id, position, id)`,
 	}
 	for _, q := range queries {
-		_, _ = r.db.ExecContext(ctx, q)
+		if ctx.Err() != nil {
+			return ctx.Err()
+		}
+		// Allow up to 120s per index creation on large databases with millions of rows
+		ddlCtx, cancel := context.WithTimeout(context.Background(), 120*time.Second)
+		if _, err := r.db.ExecContext(ddlCtx, q); err != nil {
+			log.Printf("[WARN] EnsureSchema stream_repo warning: %v (query: %s)", err, q)
+		}
+		cancel()
 	}
 	return nil
 }
@@ -553,6 +571,51 @@ func (r *StreamRepo) PruneObsoleteStreams(ctx context.Context, listID uint64, ta
 	return totalPruned, nil
 }
 
+// GetCategoryMap returns a map of category ID -> category Name for the given listID and table.
+func (r *StreamRepo) GetCategoryMap(ctx context.Context, listID uint64, tableName string) (map[uint64]string, error) {
+	validTables := map[string]bool{
+		"channels_categories": true,
+		"vods_categories":     true,
+		"series_categories":   true,
+	}
+	if !validTables[tableName] {
+		return nil, fmt.Errorf("invalid categories table name: %s", tableName)
+	}
+
+	rows, err := r.db.QueryContext(ctx, fmt.Sprintf("SELECT id, name FROM %s WHERE list_id = ?", tableName), listID)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	cats := make(map[uint64]string)
+	for rows.Next() {
+		var id uint64
+		var name string
+		if err := rows.Scan(&id, &name); err == nil {
+			cats[id] = name
+		}
+	}
+	return cats, rows.Err()
+}
+
+// GetStreamCount returns the count of streams in tableName for the given listID.
+func (r *StreamRepo) GetStreamCount(ctx context.Context, listID uint64, tableName string) (int, error) {
+	validTables := map[string]bool{
+		"channels":        true,
+		"vods":            true,
+		"series":          true,
+		"series_episodes": true,
+	}
+	if !validTables[tableName] {
+		return 0, fmt.Errorf("invalid streams table name: %s", tableName)
+	}
+
+	var count int
+	err := r.db.QueryRowContext(ctx, fmt.Sprintf("SELECT COUNT(*) FROM %s WHERE list_id = ?", tableName), listID).Scan(&count)
+	return count, err
+}
+
 // GetDistinctEpgIDsForPlaylists returns unique, non-empty EPG identifiers across the given playlists.
 // If playlistIDs is empty, it returns distinct EPG identifiers across all channels in the database.
 func (r *StreamRepo) GetDistinctEpgIDsForPlaylists(ctx context.Context, playlistIDs ...uint64) ([]string, error) {
@@ -608,6 +671,57 @@ func (r *StreamRepo) GetDistinctEpgIDs(ctx context.Context, listID uint64) ([]st
 // GetAllDistinctEpgIDs returns unique, non-empty EPG identifiers across all channels of all playlists.
 func (r *StreamRepo) GetAllDistinctEpgIDs(ctx context.Context) ([]string, error) {
 	return r.GetDistinctEpgIDsForPlaylists(ctx)
+}
+
+// GetEpgCatchupMap returns a map of epg_id -> max_catchup across the specified playlists (or all if none specified).
+func (r *StreamRepo) GetEpgCatchupMap(ctx context.Context, playlistIDs ...uint64) (map[string]int, error) {
+	var query string
+	var args []interface{}
+
+	if len(playlistIDs) > 0 {
+		placeholders := make([]string, len(playlistIDs))
+		for i, pid := range playlistIDs {
+			placeholders[i] = "?"
+			args = append(args, pid)
+		}
+		query = fmt.Sprintf(`
+			SELECT epg, MAX(CASE WHEN catchup > 0 THEN catchup ELSE 0 END) AS max_catchup
+			FROM channels
+			WHERE epg IS NOT NULL AND epg != '' AND epg != 'dummy.epg'
+			  AND list_id IN (%s)
+			GROUP BY epg
+		`, strings.Join(placeholders, ","))
+	} else {
+		query = `
+			SELECT epg, MAX(CASE WHEN catchup > 0 THEN catchup ELSE 0 END) AS max_catchup
+			FROM channels
+			WHERE epg IS NOT NULL AND epg != '' AND epg != 'dummy.epg'
+			GROUP BY epg
+		`
+	}
+
+	rows, err := r.db.QueryContext(ctx, query, args...)
+	if err != nil {
+		return nil, fmt.Errorf("failed querying epg catchup map: %w", err)
+	}
+	defer rows.Close()
+
+	catchupMap := make(map[string]int)
+	for rows.Next() {
+		var id string
+		var maxCatchup int
+		if err := rows.Scan(&id, &maxCatchup); err == nil {
+			id = strings.TrimSpace(id)
+			if id != "" {
+				if maxCatchup > 14 {
+					maxCatchup = 14
+				}
+				catchupMap[id] = maxCatchup
+			}
+		}
+	}
+
+	return catchupMap, rows.Err()
 }
 
 // PurgeAllStreams deletes all channels, vods, series, episodes, and their categories.

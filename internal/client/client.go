@@ -222,6 +222,9 @@ func (c *APIClient) applyHeaders(req *http.Request, token, password string) {
 
 	req.Header.Set("Content-Type", "application/json")
 	req.Header.Set("Accept", "application/json")
+	req.Header.Set("Cache-Control", "no-cache, no-store, must-revalidate")
+	req.Header.Set("Pragma", "no-cache")
+	req.Header.Set("Expires", "0")
 	req.Header.Set("x-api-token", token)
 	if password != "" {
 		req.Header.Set("x-token-password", password)
@@ -734,6 +737,11 @@ func (c *APIClient) GetEPG(ctx context.Context, epgReq EpgRequest) ([]EpgProgram
 // and enforces a pacing delay between chunks (default 1,500ms) to respect the 40 req/min limit on /epg.
 // If onProgress is provided, it is invoked after each chunk with (processed, total).
 func (c *APIClient) GetEPGInChunks(ctx context.Context, epgIDs []string, days int, onProgress ...func(processed int, total int)) ([]EpgProgramme, error) {
+	return c.GetEPGInChunksWithDate(ctx, epgIDs, 0, days, onProgress...)
+}
+
+// GetEPGInChunksWithDate is like GetEPGInChunks but allows specifying an explicit starting Unix timestamp date.
+func (c *APIClient) GetEPGInChunksWithDate(ctx context.Context, epgIDs []string, date int64, days int, onProgress ...func(processed int, total int)) ([]EpgProgramme, error) {
 	const chunkSize = 200
 	var allProgrammes []EpgProgramme
 	pacing := c.GetEpgPacingDelay()
@@ -747,6 +755,7 @@ func (c *APIClient) GetEPGInChunks(ctx context.Context, epgIDs []string, days in
 		chunk := epgIDs[i:end]
 		req := EpgRequest{
 			EpgIDs: chunk,
+			Date:   date,
 			Days:   days,
 		}
 

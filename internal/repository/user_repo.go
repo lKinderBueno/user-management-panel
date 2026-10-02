@@ -1061,11 +1061,17 @@ func (r *UserRepo) GetUsersForExpirySync(ctx context.Context, all bool, daysRang
 			SELECT u.list_id, u.id, u.name, u.expiry, u.patterns, COALESCE(p.patterns, '[]'), u.max_connections
 			FROM managed_users u
 			LEFT JOIN playlists p ON u.list_id = p.id
-			WHERE u.expiry < NOW() + INTERVAL ? DAY
-			  AND u.expiry > NOW() - INTERVAL ? DAY
-			  AND u.updatedAt < NOW() - INTERVAL 1 DAY
-			  AND u.createdAt < NOW() - INTERVAL 2 DAY
-			  AND u.sync_expiry_date = 1
+			WHERE (
+			    (u.expiry IS NULL AND (u.updatedAt = u.createdAt OR u.updatedAt < NOW() - INTERVAL 1 HOUR))
+			    OR (u.expiry < NOW() AND (u.updatedAt = u.createdAt OR u.updatedAt < NOW() - INTERVAL 6 HOUR))
+			    OR (
+			        u.expiry < NOW() + INTERVAL ? DAY
+			        AND u.expiry > NOW() - INTERVAL ? DAY
+			        AND u.updatedAt < NOW() - INTERVAL 1 DAY
+			        AND u.createdAt < NOW() - INTERVAL 2 DAY
+			    )
+			)
+			AND u.sync_expiry_date = 1
 			ORDER BY u.id ASC
 		`
 		rows, err = r.db.QueryContext(ctx, query, windowDays, windowDays)

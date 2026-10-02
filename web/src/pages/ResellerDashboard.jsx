@@ -648,22 +648,39 @@ export default function ResellerDashboard({
     }
   };
 
-  const handleToggleSelectId = (id, e, rangeIds) => {
-    if (Array.isArray(rangeIds) && rangeIds.length > 0) {
+  const handleToggleSelectId = (id, e, rangeIds, isAdditive) => {
+    if (Array.isArray(rangeIds)) {
+      if (rangeIds.length === 0) {
+        setSelectedUserIds([]);
+        setActiveUser(null);
+        return;
+      }
       setSelectedUserIds((prev) => {
-        const set = new Set(prev);
-        rangeIds.forEach((rid) => set.add(rid));
-        const next = Array.from(set);
-        if (next.length === 1) {
+        let next;
+        if (isAdditive || e?.ctrlKey || e?.metaKey) {
+          const set = new Set(prev);
+          rangeIds.forEach((rid) => set.add(rid));
+          next = Array.from(set);
+        } else {
+          next = Array.from(new Set(rangeIds));
+        }
+        if (id != null) {
+          const clicked = users.find((u) => String(u.id) === String(id));
+          if (clicked) setActiveUser(clicked);
+        } else if (next.length === 1) {
           const single = users.find((u) => String(u.id) === String(next[0]));
           if (single) setActiveUser(single);
+        } else if (next.length === 0) {
+          setActiveUser(null);
         }
         return next;
       });
       return;
     }
+
     setSelectedUserIds((prev) => {
-      const next = prev.some((item) => String(item) === String(id))
+      const exists = prev.some((item) => String(item) === String(id));
+      const next = exists
         ? prev.filter((item) => String(item) !== String(id))
         : [...prev, id];
       if (next.length === 1) {
@@ -671,15 +688,17 @@ export default function ResellerDashboard({
         if (single) setActiveUser(single);
       } else if (next.length === 0) {
         setActiveUser(null);
+      } else if (!exists && id != null) {
+        const clicked = users.find((u) => String(u.id) === String(id));
+        if (clicked) setActiveUser(clicked);
       }
       return next;
     });
   };
 
   const handleSelectUser = (user) => {
-    setActiveUser({ ...user });
-    if (user?.id != null) {
-      setSelectedUserIds((prev) => (prev.length <= 1 ? [user.id] : prev));
+    if (user) {
+      setActiveUser({ ...user });
     }
   };
 
@@ -1422,8 +1441,7 @@ export default function ResellerDashboard({
               onSelectAllVisible={handleSelectAllVisible}
               activeUserId={activeUser?.id}
               onSelectUser={(u) => {
-                setActiveUser({ ...u });
-                setSelectedUserIds((prev) => (prev.length <= 1 ? [u.id] : prev));
+                if (u) setActiveUser({ ...u });
               }}
               onSelectOnlyUser={handleSelectOnlyUser}
               onClearSelection={handleClearSelection}

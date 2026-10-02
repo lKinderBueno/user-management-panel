@@ -59,6 +59,7 @@ CREATE TABLE IF NOT EXISTS `channels_categories` (
     `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (`list_id`, `id`),
     KEY `idx_channels_cat_last_seen` (`list_id`, `last_seen_at`),
+    KEY `idx_channels_cat_list_pos` (`list_id`, `position`, `id`),
     CONSTRAINT `fk_channels_cat_playlist` FOREIGN KEY (`list_id`) REFERENCES `playlists` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -80,6 +81,8 @@ CREATE TABLE IF NOT EXISTS `channels` (
     `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (`list_id`, `id`),
     KEY `idx_channels_category` (`list_id`, `category_id`),
+    KEY `idx_channels_list_cat_pos` (`list_id`, `category_id`, `position`, `id`),
+    KEY `idx_channels_list_pos` (`list_id`, `position`, `id`),
     KEY `idx_channels_epg` (`epg`),
     KEY `idx_channels_last_seen` (`list_id`, `last_seen_at`),
     CONSTRAINT `fk_channels_playlist` FOREIGN KEY (`list_id`) REFERENCES `playlists` (`id`) ON DELETE CASCADE
@@ -99,6 +102,7 @@ CREATE TABLE IF NOT EXISTS `vods_categories` (
     `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (`list_id`, `id`),
     KEY `idx_vods_cat_last_seen` (`list_id`, `last_seen_at`),
+    KEY `idx_vods_cat_list_pos` (`list_id`, `position`, `id`),
     CONSTRAINT `fk_vods_cat_playlist` FOREIGN KEY (`list_id`) REFERENCES `playlists` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -118,6 +122,8 @@ CREATE TABLE IF NOT EXISTS `vods` (
     `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (`list_id`, `id`),
     KEY `idx_vods_category` (`list_id`, `category_id`),
+    KEY `idx_vods_list_cat_pos` (`list_id`, `category_id`, `position`, `id`),
+    KEY `idx_vods_list_pos` (`list_id`, `position`, `id`),
     KEY `idx_vods_last_seen` (`list_id`, `last_seen_at`),
     CONSTRAINT `fk_vods_playlist` FOREIGN KEY (`list_id`) REFERENCES `playlists` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -136,6 +142,7 @@ CREATE TABLE IF NOT EXISTS `series_categories` (
     `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (`list_id`, `id`),
     KEY `idx_series_cat_last_seen` (`list_id`, `last_seen_at`),
+    KEY `idx_series_cat_list_pos` (`list_id`, `position`, `id`),
     CONSTRAINT `fk_series_cat_playlist` FOREIGN KEY (`list_id`) REFERENCES `playlists` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
 
@@ -162,6 +169,8 @@ CREATE TABLE IF NOT EXISTS `series` (
     `updated_at` DATETIME(3) NOT NULL DEFAULT CURRENT_TIMESTAMP(3) ON UPDATE CURRENT_TIMESTAMP(3),
     PRIMARY KEY (`list_id`, `id`),
     KEY `idx_series_category` (`list_id`, `category_id`),
+    KEY `idx_series_list_cat_pos` (`list_id`, `category_id`, `position`, `id`),
+    KEY `idx_series_list_pos` (`list_id`, `position`, `id`),
     KEY `idx_series_last_seen` (`list_id`, `last_seen_at`),
     CONSTRAINT `fk_series_playlist` FOREIGN KEY (`list_id`) REFERENCES `playlists` (`id`) ON DELETE CASCADE
 ) ENGINE=InnoDB DEFAULT CHARSET=utf8mb4 COLLATE=utf8mb4_unicode_ci;
@@ -349,8 +358,8 @@ CREATE TABLE IF NOT EXISTS `system_settings` (
     `throttle_m3u_epg_limit` INT NOT NULL DEFAULT 18,
     `throttle_m3u_epg_window_seconds` INT NOT NULL DEFAULT 300,
     `throttle_xtream_enabled` TINYINT(1) NOT NULL DEFAULT 1,
-    `throttle_xtream_limit` INT NOT NULL DEFAULT 40,
-    `throttle_xtream_window_seconds` INT NOT NULL DEFAULT 20,
+    `throttle_xtream_limit` INT NOT NULL DEFAULT 120,
+    `throttle_xtream_window_seconds` INT NOT NULL DEFAULT 30,
     `throttle_stalker_enabled` TINYINT(1) NOT NULL DEFAULT 0,
     `throttle_stalker_limit` INT NOT NULL DEFAULT 60,
     `throttle_stalker_window_seconds` INT NOT NULL DEFAULT 60,

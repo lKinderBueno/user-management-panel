@@ -68,7 +68,7 @@ func New(s *models.SystemSettings, rdb *redis.Client) *Throttler {
 	// Initialize default scopes
 	t.scopes[ScopeRouter] = ScopeConfig{Enabled: true, Limit: 30, Window: 10 * time.Second}
 	t.scopes[ScopeM3UEPG] = ScopeConfig{Enabled: true, Limit: 18, Window: 300 * time.Second}
-	t.scopes[ScopeXtream] = ScopeConfig{Enabled: true, Limit: 40, Window: 20 * time.Second}
+	t.scopes[ScopeXtream] = ScopeConfig{Enabled: true, Limit: 120, Window: 30 * time.Second}
 	t.scopes[ScopeStalker] = ScopeConfig{Enabled: false, Limit: 60, Window: 60 * time.Second}
 	t.globalEnable = true
 
@@ -132,11 +132,11 @@ func (t *Throttler) SetSettings(s *models.SystemSettings) {
 	// Xtream API scope
 	xcLimit := s.ThrottleXtreamLimit
 	if xcLimit <= 0 {
-		xcLimit = 40
+		xcLimit = 120
 	}
 	xcWin := s.ThrottleXtreamWindowSeconds
 	if xcWin <= 0 {
-		xcWin = 20
+		xcWin = 30
 	}
 	t.scopes[ScopeXtream] = ScopeConfig{
 		Enabled: s.ThrottleXtreamEnabled,

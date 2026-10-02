@@ -101,7 +101,7 @@ type FlexibleTime struct {
 
 func (ft *FlexibleTime) UnmarshalJSON(b []byte) error {
 	s := strings.Trim(string(b), `"`)
-	if s == "" || s == "null" {
+	if s == "" || s == "null" || s == "0" || strings.HasPrefix(s, "0000-00-00") {
 		ft.Valid = false
 		return nil
 	}
@@ -317,4 +317,30 @@ type ClientManagedUser struct {
 	UserSettings       json.RawMessage `json:"user_settings"`
 	CreatedAt          FlexibleTime    `json:"createdAt"`
 	UpdatedAt          FlexibleTime    `json:"updatedAt"`
+}
+
+// UnmarshalJSON supports "expiry", "exp_date", "expire_date", and "expiration_date" aliases.
+func (u *ClientManagedUser) UnmarshalJSON(data []byte) error {
+	type Alias ClientManagedUser
+	aux := struct {
+		*Alias
+		ExpDate        FlexibleTime `json:"exp_date"`
+		ExpireDate     FlexibleTime `json:"expire_date"`
+		ExpirationDate FlexibleTime `json:"expiration_date"`
+	}{
+		Alias: (*Alias)(u),
+	}
+	if err := json.Unmarshal(data, &aux); err != nil {
+		return err
+	}
+	if !u.Expiry.Valid {
+		if aux.ExpDate.Valid {
+			u.Expiry = aux.ExpDate
+		} else if aux.ExpireDate.Valid {
+			u.Expiry = aux.ExpireDate
+		} else if aux.ExpirationDate.Valid {
+			u.Expiry = aux.ExpirationDate
+		}
+	}
+	return nil
 }

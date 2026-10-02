@@ -85,6 +85,13 @@ func (s *CustomerExpirySyncer) SyncAll(ctx context.Context, all bool, daysRange 
 				return ctx.Err()
 			default:
 			}
+			if i > 0 {
+				select {
+				case <-ctx.Done():
+					return ctx.Err()
+				case <-time.After(50 * time.Millisecond):
+				}
+			}
 			s.processCustomer(ctx, i, total, c)
 		}
 	} else {
@@ -97,6 +104,14 @@ func (s *CustomerExpirySyncer) SyncAll(ctx context.Context, all bool, daysRange 
 				log.Println("[SYNC-EXPIRY] Interrupted by context cancellation")
 				break
 			case sem <- struct{}{}:
+			}
+
+			if i > 0 {
+				select {
+				case <-ctx.Done():
+					break
+				case <-time.After(100 * time.Millisecond):
+				}
 			}
 
 			wg.Add(1)
