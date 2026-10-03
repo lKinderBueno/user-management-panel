@@ -612,6 +612,23 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		}
 		path := filepath.Join(cfg.StaticDir, r.URL.Path)
 		info, err := os.Stat(path)
+
+		cleanPath := strings.TrimPrefix(filepath.Clean(r.URL.Path), string(filepath.Separator))
+		cleanPath = strings.ReplaceAll(cleanPath, "\\", "/")
+
+		if cleanPath == "build" {
+			if err == nil && !info.IsDir() {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+				w.Header().Set("Pragma", "no-cache")
+				w.Header().Set("Expires", "0")
+				http.ServeFile(w, r, path)
+				return
+			}
+			http.NotFound(w, r)
+			return
+		}
+
 		if os.IsNotExist(err) || (err == nil && info.IsDir()) {
 			p := strings.ToLower(r.URL.Path)
 			trimmed := strings.Trim(r.URL.Path, "/")
@@ -643,9 +660,23 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				return
 			}
 
+			// SPA fallback: ensure index.html is never cached aggressively by the browser
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
 			http.ServeFile(w, r, filepath.Join(cfg.StaticDir, "index.html"))
 			return
 		}
+
+		if cleanPath == "index.html" || strings.HasSuffix(cleanPath, ".html") {
+			w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+			w.Header().Set("Pragma", "no-cache")
+			w.Header().Set("Expires", "0")
+		} else if strings.HasPrefix(cleanPath, "assets/") {
+			// Immutable cache for Vite hashed static chunks
+			w.Header().Set("Cache-Control", "public, max-age=31536000, immutable")
+		}
+
 		http.FileServer(http.Dir(cfg.StaticDir)).ServeHTTP(w, r)
 	}
 

@@ -20,6 +20,7 @@ import BackupReminderManager from './components/BackupReminderManager';
 import LicenseSuspendedBanner from './components/LicenseSuspendedBanner';
 import UpdateNotificationBanner from './components/UpdateNotificationBanner';
 import { getToken, getAdmin, setToken, setAdmin, removeToken, authApi, playlistApi, userApi, setupApi, settingsApi, versionApi } from './api/client';
+import { checkBuildVersion } from './utils/versionCheck';
 import { Loader2 } from 'lucide-react';
 
 function PlaylistRouteWrapper({ playlists, currentPlaylist, setCurrentPlaylist, children }) {
@@ -235,6 +236,25 @@ export default function App() {
       window.scrollTo(0, 0);
     }
   }, [location.pathname]);
+
+  // Automatic build version check & refresh on mount, window focus, and periodically
+  React.useEffect(() => {
+    checkBuildVersion();
+
+    const handleVisibilityChange = () => {
+      if (document.visibilityState === 'visible') {
+        checkBuildVersion();
+      }
+    };
+
+    document.addEventListener('visibilitychange', handleVisibilityChange);
+    const interval = setInterval(checkBuildVersion, 10 * 60 * 1000);
+
+    return () => {
+      document.removeEventListener('visibilitychange', handleVisibilityChange);
+      clearInterval(interval);
+    };
+  }, []);
 
   // Verify auth on mount
   React.useEffect(() => {
