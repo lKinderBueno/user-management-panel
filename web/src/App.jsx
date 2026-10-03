@@ -18,7 +18,8 @@ import PlaylistPortalBranding from './pages/PlaylistPortalBranding';
 import InitialSetup from './pages/InitialSetup';
 import BackupReminderManager from './components/BackupReminderManager';
 import LicenseSuspendedBanner from './components/LicenseSuspendedBanner';
-import { getToken, getAdmin, setToken, setAdmin, removeToken, authApi, playlistApi, userApi, setupApi, settingsApi } from './api/client';
+import UpdateNotificationBanner from './components/UpdateNotificationBanner';
+import { getToken, getAdmin, setToken, setAdmin, removeToken, authApi, playlistApi, userApi, setupApi, settingsApi, versionApi } from './api/client';
 import { Loader2 } from 'lucide-react';
 
 function PlaylistRouteWrapper({ playlists, currentPlaylist, setCurrentPlaylist, children }) {
@@ -89,9 +90,17 @@ function WizardRouteWrapper({ Component, playlists, admin, defaultTab, onPlaylis
         onPlaylistsRefreshed?.();
         if (playlist) navigate(`/users/${playlist.id}`);
       }}
-      onUserCreated={() => {
+      onUserCreated={(createdUser) => {
         onPlaylistsRefreshed?.();
-        if (playlist) navigate(`/users/${playlist.id}`);
+        if (playlist) {
+          navigate(`/users/${playlist.id}`, {
+            state: {
+              notifyMessage: createdUser?.name
+                ? `User "${createdUser.name}" created successfully`
+                : 'User created successfully',
+            },
+          });
+        }
       }}
       onUsersUpdated={onPlaylistsRefreshed}
       onProvidersUpdated={onPlaylistsRefreshed}
@@ -176,6 +185,7 @@ export default function App() {
   const [expiryBeforeDate, setExpiryBeforeDate] = React.useState('');
   const [filterStats, setFilterStats] = React.useState({ onlineCount: 0, availablePatternTypes: [] });
   const [licenseInfo, setLicenseInfo] = React.useState(null);
+  const [versionInfo, setVersionInfo] = React.useState(null);
 
   const handleResetUserFilters = React.useCallback(() => {
     setUserSearch('');
@@ -286,14 +296,33 @@ export default function App() {
           license_upgrade_url: res.settings.license_upgrade_url || '',
         });
       }
+      if (res?.version_info) {
+        setVersionInfo(res.version_info);
+      }
     } catch {
       // Ignore if user lacks settings access or network issue
     }
   }, [isAuthenticated]);
 
+  // Fetch version & update status
+  const fetchVersionInfo = React.useCallback(async (force = false) => {
+    if (!isAuthenticated) return;
+    try {
+      const data = (admin?.role === 'admin')
+        ? await versionApi.checkUpdate(force)
+        : await versionApi.getVersion();
+      if (data) {
+        setVersionInfo(data);
+      }
+    } catch {
+      // Ignore network errors on version check
+    }
+  }, [isAuthenticated, admin]);
+
   React.useEffect(() => {
     fetchLicenseStatus();
-  }, [fetchLicenseStatus]);
+    fetchVersionInfo();
+  }, [fetchLicenseStatus, fetchVersionInfo]);
 
   // Fetch playlists once authenticated
   const fetchPlaylists = React.useCallback(async () => {
@@ -379,6 +408,7 @@ export default function App() {
     setAdminState(null);
     setCurrentPlaylist(null);
     setLicenseInfo(null);
+    setVersionInfo(null);
     navigate('/playlists');
   };
 
@@ -462,6 +492,7 @@ export default function App() {
         onSelectPlaylist={handleSelectPlaylist}
         userCount={userCount}
         admin={admin}
+        versionInfo={versionInfo}
         isPinned={isSidebarPinned}
         onTogglePin={toggleSidebarPin}
         isMobileOpen={isMobileSidebarOpen}
@@ -500,6 +531,10 @@ export default function App() {
           admin={admin}
           licenseInfo={licenseInfo}
           onRefresh={fetchLicenseStatus}
+        />
+
+        <UpdateNotificationBanner
+          versionInfo={versionInfo}
         />
 
         <BackupReminderManager admin={admin} />
@@ -725,6 +760,8 @@ export default function App() {
                     <SettingsDashboard
                       playlists={playlists}
                       onPlaylistsRefreshed={fetchPlaylists}
+                      versionInfo={versionInfo}
+                      onVersionRefreshed={fetchVersionInfo}
                     />
                   ) : (
                     <Navigate to={defaultUsersPath} replace />

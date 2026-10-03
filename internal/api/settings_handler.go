@@ -28,6 +28,7 @@ import (
 	"playlistlabs_user_management_os/internal/throttler"
 	"playlistlabs_user_management_os/internal/tmdb"
 	"playlistlabs_user_management_os/internal/util"
+	"playlistlabs_user_management_os/internal/version"
 )
 
 type SettingsHandler struct {
@@ -122,6 +123,16 @@ func (h *SettingsHandler) GetSettings(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	h.populateCacheStatus(r.Context(), status)
+	vInfo := version.GetInfo()
+	status.VersionInfo = &models.VersionInfoSummary{
+		Version:         vInfo.Version,
+		LatestVersion:   vInfo.LatestVersion,
+		UpdateAvailable: vInfo.UpdateAvailable,
+		ChangelogURL:    vInfo.ChangelogURL,
+		BuildDate:       vInfo.BuildDate,
+		GitCommit:       vInfo.GitCommit,
+		CheckedAt:       vInfo.CheckedAt,
+	}
 	writeJSON(w, http.StatusOK, status)
 }
 

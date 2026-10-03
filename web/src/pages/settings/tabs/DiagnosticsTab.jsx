@@ -13,12 +13,20 @@ import {
   Clock,
   Layers,
   Search,
+  Sparkles,
+  ExternalLink,
 } from 'lucide-react';
 import { diagnosticsApi } from '../../../api/client';
 import { Button } from '../../../components/ui';
 import { isSectionMatching } from '../constants/settingsSearchIndex';
 
-export default function DiagnosticsTab({ notify, searchFilter: globalSearchFilter = '' }) {
+export default function DiagnosticsTab({
+  notify,
+  searchFilter: globalSearchFilter = '',
+  versionInfo,
+  onCheckUpdate,
+  checkingUpdate = false,
+}) {
   const [systemInfo, setSystemInfo] = useState(null);
   const [loadingInfo, setLoadingInfo] = useState(true);
   const [logs, setLogs] = useState([]);
@@ -106,11 +114,105 @@ export default function DiagnosticsTab({ notify, searchFilter: globalSearchFilte
     isSectionMatching('diagnostics-health', globalSearchFilter) ||
     isSectionMatching('diagnostics-database', globalSearchFilter) ||
     isSectionMatching('diagnostics-specs', globalSearchFilter);
+  const showVersion = isSectionMatching('diagnostics-version', globalSearchFilter);
   const showBundle = isSectionMatching('diagnostics-bundle', globalSearchFilter);
   const showLogs = isSectionMatching('diagnostics-logs', globalSearchFilter);
 
+  const activeVersion = versionInfo?.version || systemInfo?.version || '1.0.0';
+  const latestVersion = versionInfo?.latest_version || activeVersion;
+  const isUpdateAvailable = Boolean(versionInfo?.update_available);
+
   return (
     <div className="space-y-6 animate-in fade-in duration-200">
+      {/* ========================================================= */}
+      {/* 0. VERSION & RELEASE UPDATES                              */}
+      {/* ========================================================= */}
+      {showVersion && (
+        <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-[0.375rem] p-5 space-y-4 shadow-argon dark:shadow-2xl">
+          <div className="flex flex-wrap items-center justify-between gap-4 pb-3 border-b border-[#e9ecef] dark:border-slate-800">
+            <div className="flex items-center gap-3">
+              <div className="w-9 h-9 rounded-[0.375rem] bg-[#11cdef]/10 dark:bg-cyan-950/60 border border-[#11cdef]/20 dark:border-cyan-700/40 flex items-center justify-center text-[#11cdef] dark:text-cyan-400">
+                <Sparkles className="w-5 h-5" />
+              </div>
+              <div>
+                <div className="flex items-center gap-2 flex-wrap">
+                  <h3 className="text-sm font-bold text-[#32325d] dark:text-white">Dashboard Version & Updates</h3>
+                  {isUpdateAvailable ? (
+                    <span className="text-[12px] px-2 py-0.5 rounded-[0.25rem] font-semibold bg-blue-100 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 flex items-center gap-1">
+                      <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+                      Update Available (v{latestVersion})
+                    </span>
+                  ) : (
+                    <span className="text-[12px] px-2 py-0.5 rounded-[0.25rem] font-semibold bg-[#e8fbf8] dark:bg-emerald-950/60 text-[#2dce89] dark:text-emerald-400 border border-[#2dce89]/20 dark:border-emerald-800/40 flex items-center gap-1">
+                      <Check className="w-3.5 h-3.5" />
+                      Up to Date
+                    </span>
+                  )}
+                </div>
+                <p className="text-[13px] text-[#8898aa] dark:text-slate-400">
+                  Installed dashboard version, release update verification, and official changelog.
+                </p>
+              </div>
+            </div>
+
+            <div className="flex items-center gap-2">
+              {onCheckUpdate && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={onCheckUpdate}
+                  disabled={checkingUpdate}
+                  className="flex items-center gap-1.5"
+                >
+                  <RefreshCw className={`w-3.5 h-3.5 ${checkingUpdate ? 'animate-spin' : ''}`} />
+                  <span>{checkingUpdate ? 'Checking...' : 'Check for Updates'}</span>
+                </Button>
+              )}
+
+              <a
+                href={versionInfo?.changelog_url || 'https://guide-ump.playlistlabs.io/changelog/'}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="inline-flex items-center gap-1.5 px-3 py-1.5 rounded-md bg-[#5e72e4] hover:bg-[#4c5ec4] text-white text-xs font-semibold shadow-xs transition"
+              >
+                <span>View Changelog</span>
+                <ExternalLink className="w-3.5 h-3.5" />
+              </a>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+            <div className="p-3 bg-[#f8f9fe] dark:bg-slate-800/60 border border-[#e9ecef] dark:border-slate-800 rounded-[0.375rem]">
+              <div className="text-[12px] uppercase tracking-wider text-[#8898aa] dark:text-slate-400 font-semibold">
+                Current Installed Version
+              </div>
+              <div className="text-sm font-bold text-[#32325d] dark:text-white font-mono mt-1">
+                v{activeVersion}
+              </div>
+            </div>
+
+            <div className="p-3 bg-[#f8f9fe] dark:bg-slate-800/60 border border-[#e9ecef] dark:border-slate-800 rounded-[0.375rem]">
+              <div className="text-[12px] uppercase tracking-wider text-[#8898aa] dark:text-slate-400 font-semibold">
+                Latest Available Release
+              </div>
+              <div className="text-sm font-bold text-[#3970e1] dark:text-blue-400 font-mono mt-1">
+                v{latestVersion}
+              </div>
+            </div>
+
+            <div className="p-3 bg-[#f8f9fe] dark:bg-slate-800/60 border border-[#e9ecef] dark:border-slate-800 rounded-[0.375rem]">
+              <div className="text-[12px] uppercase tracking-wider text-[#8898aa] dark:text-slate-400 font-semibold">
+                Update Command
+              </div>
+              <div className="text-xs font-mono text-slate-700 dark:text-slate-300 mt-1 truncate" title="docker compose pull && docker compose up -d">
+                docker compose pull && docker compose up -d
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
       {/* ========================================================= */}
       {/* 1. HEADER & SYSTEM OVERVIEW                               */}
       {/* ========================================================= */}
@@ -124,8 +226,13 @@ export default function DiagnosticsTab({ notify, searchFilter: globalSearchFilte
             <div>
               <div className="flex items-center gap-2 flex-wrap">
                 <h2 className="text-sm font-bold text-[#32325d] dark:text-white">System Diagnostics & Health</h2>
+                {systemInfo?.version && (
+                  <span className="text-[12px] px-2 py-0.5 rounded-[0.25rem] font-mono font-semibold bg-[#ebf2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400 border border-[#3970e1]/20 dark:border-blue-700/40">
+                    v{systemInfo.version}
+                  </span>
+                )}
                 {systemInfo?.log_level && (
-                  <span className="text-[12px] px-2 py-0.5 rounded-[0.25rem] font-mono font-semibold bg-[#ebf2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400 border border-[#3970e1]/20 dark:border-blue-700/40 uppercase">
+                  <span className="text-[12px] px-2 py-0.5 rounded-[0.25rem] font-mono font-semibold bg-gray-100 dark:bg-slate-800 text-[#525f7f] dark:text-slate-300 border border-gray-200 dark:border-slate-700 uppercase">
                     LOG_LEVEL: {systemInfo.log_level}
                   </span>
                 )}

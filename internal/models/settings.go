@@ -130,6 +130,17 @@ type CacheStatusSummary struct {
 	Uptime      string `json:"uptime"`
 }
 
+// VersionInfoSummary provides panel version and release update details.
+type VersionInfoSummary struct {
+	Version         string    `json:"version"`
+	LatestVersion   string    `json:"latest_version"`
+	UpdateAvailable bool      `json:"update_available"`
+	ChangelogURL    string    `json:"changelog_url"`
+	BuildDate       string    `json:"build_date,omitempty"`
+	GitCommit       string    `json:"git_commit,omitempty"`
+	CheckedAt       time.Time `json:"checked_at,omitempty"`
+}
+
 // SettingsResponse is returned by GET /api/admin/settings including live runtime scheduler state.
 type SettingsResponse struct {
 	Settings     SystemSettings      `json:"settings"`
@@ -138,4 +149,5 @@ type SettingsResponse struct {
 	Backup       TaskStatusSummary   `json:"backup"`
 	CacheStatus  CacheStatusSummary  `json:"cache_status"`
 	LatestBackup *BackupFileMetadata `json:"latest_backup,omitempty"`
+	VersionInfo  *VersionInfoSummary `json:"version_info,omitempty"`
 }

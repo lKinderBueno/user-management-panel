@@ -342,6 +342,16 @@ export default function ResellerDashboard({
     setTimeout(() => setNotification(null), 3500);
   };
 
+  // Handle notifications passed via location.state (e.g. from user creation wizard)
+  React.useEffect(() => {
+    if (location.state?.notifyMessage) {
+      showNotify(location.state.notifyMessage);
+      try {
+        window.history.replaceState({}, document.title);
+      } catch {}
+    }
+  }, [location.state]);
+
   // Fetch playlist sync time
   const fetchLatestSync = React.useCallback(async () => {
     if (!currentPlaylist?.id) return;

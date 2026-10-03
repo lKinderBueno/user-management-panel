@@ -40,6 +40,7 @@ export default function AppSidebar({
   onSelectPlaylist,
   userCount = 0,
   admin,
+  versionInfo,
   isPinned = true,
   onTogglePin,
   isMobileOpen = false,
@@ -478,6 +479,17 @@ export default function AppSidebar({
               >
                 <LogOut className="w-4 h-4" />
               </button>
+              {versionInfo?.update_available && (
+                <a
+                  href={versionInfo.changelog_url || 'https://guide-ump.playlistlabs.io/changelog/'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  title={`New update v${versionInfo.latest_version} available! Click for changelog`}
+                  className="w-9 h-5 flex items-center justify-center text-[10px] font-bold font-mono text-blue-600 dark:text-blue-400 bg-blue-50 dark:bg-blue-950/60 rounded-md border border-blue-200 dark:border-blue-800"
+                >
+                  UP
+                </a>
+              )}
             </div>
           </>
         ) : (
@@ -524,6 +536,33 @@ export default function AppSidebar({
               >
                 <LogOut className="w-4 h-4" />
               </button>
+            </div>
+
+            {/* Version & Changelog Link */}
+            <div className="flex items-center justify-between px-1 text-[11px] text-slate-400 dark:text-slate-500">
+              <span className="font-mono">v{versionInfo?.version || '1.0.0'}</span>
+              {versionInfo?.update_available ? (
+                <a
+                  href={versionInfo.changelog_url || 'https://guide-ump.playlistlabs.io/changelog/'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="inline-flex items-center gap-1 font-semibold text-blue-600 dark:text-blue-400 hover:underline"
+                  title="New update available! Click to view changelog"
+                >
+                  <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-ping"></span>
+                  <span>Update v{versionInfo.latest_version}</span>
+                </a>
+              ) : (
+                <a
+                  href={versionInfo?.changelog_url || 'https://guide-ump.playlistlabs.io/changelog/'}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="hover:text-slate-600 dark:hover:text-slate-300 transition"
+                  title="View Changelog"
+                >
+                  Changelog
+                </a>
+              )}
             </div>
           </>
         )}

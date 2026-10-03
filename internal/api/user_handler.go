@@ -261,13 +261,13 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		}
 	}
 
-	// 4. Expiry
-	if u.Expiry == nil {
-		exp := time.Now().AddDate(1, 0, 0) // default 1 year
-		u.Expiry = &exp
+	// 4. Patterns & Next ID
+	if len(u.Patterns) == 0 {
+		u.Patterns = []byte("[]")
+	} else {
+		u.Patterns = sanitizePatternsJSON(u.Patterns)
 	}
 
-	// 5. Next ID
 	nextID, err := h.userRepo.GetNextID(r.Context(), listID)
 	if err != nil {
 		writeJSON(w, http.StatusInternalServerError, map[string]string{"error": "db_error", "message": err.Error()})
@@ -282,12 +282,20 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 		u.MaxConnections = 1
 	}
 
-	if len(u.Patterns) == 0 {
-		u.Patterns = []byte("[]")
-	} else {
-		u.Patterns = sanitizePatternsJSON(u.Patterns)
+	// 5. Expiry & automatic provider synchronization upon user addition
+	if (u.SyncExpiryDate || u.Expiry == nil) && h.xtreamClient != nil {
+		info, err := h.fetchProviderUserInfo(r.Context(), listID, u.Patterns, u.Username, u.Password)
+		if err == nil && info != nil && info.Updated {
+			u.Expiry = &info.Expiry
+			if info.MaxConnections > 0 {
+				u.MaxConnections = info.MaxConnections
+			}
+		}
 	}
-
+	if u.Expiry == nil {
+		exp := time.Now().AddDate(1, 0, 0) // default 1 year fallback
+		u.Expiry = &exp
+	}
 
 	// Set creator ID
 	creatorID := claims.AdminID
@@ -875,6 +883,75 @@ type ForceSyncRequest struct {
 	Password    string          `json:"password,omitempty"`
 }
 
+// fetchProviderUserInfo resolves the effective Xtream provider and queries player_api.php for account expiration and connections.
+func (h *UserHandler) fetchProviderUserInfo(ctx context.Context, listID uint64, patternsJSON []byte, username, password string) (*usersyncer.XtreamCustomerInfo, error) {
+	if h.xtreamClient == nil {
+		return nil, errors.New("no_xtream_client")
+	}
+
+	var userPatterns []models.PatternItem
+	if len(patternsJSON) > 0 && string(patternsJSON) != "[]" && string(patternsJSON) != "null" {
+		_ = json.Unmarshal(patternsJSON, &userPatterns)
+	}
+
+	var playlistPatterns []models.PatternItem
+	if h.playlistRepo != nil {
+		if playlist, err := h.playlistRepo.GetByID(ctx, listID); err == nil && playlist != nil {
+			if len(playlist.Patterns) > 0 && string(playlist.Patterns) != "[]" && string(playlist.Patterns) != "null" {
+				_ = json.Unmarshal(playlist.Patterns, &playlistPatterns)
+			}
+		}
+	}
+	patterns := models.MergePatterns(playlistPatterns, userPatterns)
+
+	var xtreamPattern *models.PatternItem
+	for i := range patterns {
+		if strings.EqualFold(patterns[i].Type, "xtream") {
+			xtreamPattern = &patterns[i]
+			break
+		}
+	}
+
+	if xtreamPattern == nil {
+		return nil, errors.New("no_xtream_provider")
+	}
+
+	targetURL := strings.TrimSpace(xtreamPattern.URL)
+	if xtreamPattern.UseCURL && strings.TrimSpace(xtreamPattern.CURL) != "" {
+		targetURL = strings.TrimSpace(xtreamPattern.CURL)
+	}
+	if targetURL == "" {
+		return nil, errors.New("no_xtream_provider")
+	}
+
+	providerUser := strings.TrimSpace(xtreamPattern.Param1)
+	if providerUser == "" {
+		providerUser = strings.TrimSpace(username)
+	}
+
+	providerPass := strings.TrimSpace(xtreamPattern.Param2)
+	if providerPass == "" {
+		providerPass = strings.TrimSpace(password)
+	}
+
+	if providerUser == "" || providerPass == "" {
+		return nil, errors.New("missing_credentials")
+	}
+
+	syncCtx, cancel := context.WithTimeout(ctx, 6*time.Second)
+	defer cancel()
+
+	info, err := h.xtreamClient.FetchUserInfo(syncCtx, targetURL, providerUser, providerPass)
+	if err != nil {
+		return nil, fmt.Errorf("provider_sync_failed: %w", err)
+	}
+	if info == nil || !info.Updated {
+		return nil, errors.New("no_data_returned")
+	}
+
+	return info, nil
+}
+
 func (h *UserHandler) ForceSync(w http.ResponseWriter, r *http.Request) {
 	listIDStr := chi.URLParam(r, "listId")
 	listID, err := strconv.ParseUint(listIDStr, 10, 64)
@@ -934,93 +1011,52 @@ func (h *UserHandler) ForceSync(w http.ResponseWriter, r *http.Request) {
 
 	// Fallback to server query if client didn't supply or failed to parse raw_response
 	if info == nil {
-		// 1. Resolve patterns: merge playlist patterns and user patterns
-		var userPatterns []models.PatternItem
 		patternsJSON := user.Patterns
 		if len(syncReq.Patterns) > 0 && string(syncReq.Patterns) != "[]" && string(syncReq.Patterns) != "null" {
 			patternsJSON = syncReq.Patterns
 		}
-		if len(patternsJSON) > 0 && string(patternsJSON) != "[]" && string(patternsJSON) != "null" {
-			_ = json.Unmarshal(patternsJSON, &userPatterns)
+
+		userToUse := syncReq.Username
+		if userToUse == "" {
+			userToUse = user.Username
+		}
+		passToUse := syncReq.Password
+		if passToUse == "" {
+			passToUse = user.Password
 		}
 
-		var playlistPatterns []models.PatternItem
-		if playlist, err := h.playlistRepo.GetByID(r.Context(), listID); err == nil && playlist != nil {
-			if len(playlist.Patterns) > 0 && string(playlist.Patterns) != "[]" && string(playlist.Patterns) != "null" {
-				_ = json.Unmarshal(playlist.Patterns, &playlistPatterns)
-			}
-		}
-		patterns := models.MergePatterns(playlistPatterns, userPatterns)
-
-		// 2. Find Xtream pattern
-		var xtreamPattern *models.PatternItem
-		for i := range patterns {
-			if strings.EqualFold(patterns[i].Type, "xtream") {
-				xtreamPattern = &patterns[i]
-				break
-			}
-		}
-
-		if xtreamPattern == nil || strings.TrimSpace(xtreamPattern.URL) == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error":   "no_xtream_provider",
-				"message": "No Xtream provider URL found for this user or playlist",
-			})
-			return
-		}
-
-		targetURL := xtreamPattern.URL
-		if xtreamPattern.UseCURL && strings.TrimSpace(xtreamPattern.CURL) != "" {
-			targetURL = xtreamPattern.CURL
-		}
-
-		providerUser := strings.TrimSpace(xtreamPattern.Param1)
-		if providerUser == "" {
-			if syncReq.Username != "" {
-				providerUser = strings.TrimSpace(syncReq.Username)
-			} else {
-				providerUser = strings.TrimSpace(user.Username)
-			}
-		}
-
-		providerPass := strings.TrimSpace(xtreamPattern.Param2)
-		if providerPass == "" {
-			if syncReq.Password != "" {
-				providerPass = strings.TrimSpace(syncReq.Password)
-			} else {
-				providerPass = strings.TrimSpace(user.Password)
-			}
-		}
-
-		if providerUser == "" || providerPass == "" {
-			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error":   "missing_credentials",
-				"message": "Provider username and password are required to sync provider data",
-			})
-			return
-		}
-
-		// 3. Query provider API
-		syncCtx, cancel := context.WithTimeout(r.Context(), 10*time.Second)
-		defer cancel()
-
-		var fetchErr error
-		info, fetchErr = h.xtreamClient.FetchUserInfo(syncCtx, targetURL, providerUser, providerPass)
+		fetchedInfo, fetchErr := h.fetchProviderUserInfo(r.Context(), listID, patternsJSON, userToUse, passToUse)
 		if fetchErr != nil {
-			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error":   "provider_sync_failed",
-				"message": fmt.Sprintf("Provider sync failed: %v", fetchErr),
-			})
-			return
+			errStr := fetchErr.Error()
+			switch {
+			case errors.Is(fetchErr, errors.New("no_xtream_provider")) || strings.Contains(errStr, "no_xtream_provider"):
+				writeJSON(w, http.StatusBadRequest, map[string]string{
+					"error":   "no_xtream_provider",
+					"message": "No Xtream provider URL found for this user or playlist",
+				})
+				return
+			case errors.Is(fetchErr, errors.New("missing_credentials")) || strings.Contains(errStr, "missing_credentials"):
+				writeJSON(w, http.StatusBadRequest, map[string]string{
+					"error":   "missing_credentials",
+					"message": "Provider username and password are required to sync provider data",
+				})
+				return
+			case errors.Is(fetchErr, errors.New("no_data_returned")) || strings.Contains(errStr, "no_data_returned"):
+				writeJSON(w, http.StatusBadRequest, map[string]string{
+					"error":   "no_data_returned",
+					"message": "Provider did not return account info",
+				})
+				return
+			default:
+				writeJSON(w, http.StatusBadRequest, map[string]string{
+					"error":   "provider_sync_failed",
+					"message": fmt.Sprintf("Provider sync failed: %v", fetchErr),
+				})
+				return
+			}
 		}
 
-		if info == nil || !info.Updated {
-			writeJSON(w, http.StatusBadRequest, map[string]string{
-				"error":   "no_data_returned",
-				"message": "Provider did not return account info",
-			})
-			return
-		}
+		info = fetchedInfo
 		syncSource = "server"
 	}
 

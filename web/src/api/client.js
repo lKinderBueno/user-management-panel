@@ -525,5 +525,10 @@ export const diagnosticsApi = {
   },
 };
 
+export const versionApi = {
+  getVersion: () => apiFetch('/version'),
+  checkUpdate: (refresh = false) => apiFetch(`/admin/version${refresh ? '?refresh=true' : ''}`),
+};
+
 
 

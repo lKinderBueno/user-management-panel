@@ -137,7 +137,7 @@ func IsIPAddress(host string) bool {
 }
 
 // IsStreamingRoute identifies whether an HTTP request path corresponds to Xtream API,
-// M3U/EPG generator, Stalker portal, or Stream Redirect playback.
+// M3U/EPG generator, Stalker portal, Stream Redirect playback, or short M3U/EPG token URLs.
 func IsStreamingRoute(path string) bool {
 	p := strings.ToLower(strings.TrimSpace(path))
 
@@ -163,7 +163,20 @@ func IsStreamingRoute(path string) bool {
 		return true
 	}
 
+	// Playlist and EPG extensions
+	if strings.HasSuffix(p, ".m3u") || strings.HasSuffix(p, ".m3u8") ||
+		strings.HasSuffix(p, ".xml") || strings.HasSuffix(p, ".xml.gz") {
+		return true
+	}
+
 	if redirectorStreamRegex.MatchString(p) || timeshiftStreamRegex.MatchString(p) || legacyStreamPathRegex.MatchString(p) {
+		return true
+	}
+
+	// Single-segment short token URLs (e.g. /usr_m3u_token123, /tok123/)
+	// Must not match root or administrative SPA/API routes
+	trimmed := strings.Trim(p, "/")
+	if trimmed != "" && !strings.Contains(trimmed, "/") && !IsAdminRoute(p) {
 		return true
 	}
 
@@ -174,7 +187,7 @@ func IsStreamingRoute(path string) bool {
 // administration REST APIs, authentication endpoints, or documentation.
 // Note: Public client portal routes (/portal, /api/user-dashboard/config) return false.
 func IsAdminRoute(path string) bool {
-	p := strings.TrimSpace(path)
+	p := strings.ToLower(strings.TrimSpace(path))
 
 	// Public client portal routes are NOT admin routes
 	if strings.HasPrefix(p, "/portal") || p == "/api/user-dashboard/config" {
@@ -190,7 +203,8 @@ func IsAdminRoute(path string) bool {
 		strings.HasPrefix(p, "/api/users") ||
 		strings.HasPrefix(p, "/api/security") ||
 		strings.HasPrefix(p, "/api/geoip") ||
-		strings.HasPrefix(p, "/api/sync-logs") {
+		strings.HasPrefix(p, "/api/sync-logs") ||
+		strings.HasPrefix(p, "/api/caddy") {
 		return true
 	}
 
@@ -200,8 +214,23 @@ func IsAdminRoute(path string) bool {
 	}
 
 	// Dashboard static files and root SPA
-	if p == "/" || p == "/index.html" || strings.HasPrefix(p, "/assets/") || p == "/vite.svg" {
+	if p == "/" || p == "/index.html" || strings.HasPrefix(p, "/assets/") || p == "/vite.svg" ||
+		p == "/favicon.ico" || p == "/robots.txt" || p == "/manifest.json" {
 		return true
+	}
+
+	// Dashboard SPA client routes
+	adminSPARoutes := []string{
+		"/login", "/register", "/forgot-password", "/reset-password",
+		"/playlists", "/users", "/dashboard", "/user-management",
+		"/team", "/collaborators", "/subadmins",
+		"/tokens", "/api-tokens", "/security", "/settings",
+		"/info", "/portal-branding", "/backup",
+	}
+	for _, route := range adminSPARoutes {
+		if p == route || strings.HasPrefix(p, route+"/") {
+			return true
+		}
 	}
 
 	return false

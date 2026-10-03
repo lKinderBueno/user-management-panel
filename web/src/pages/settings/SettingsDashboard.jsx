@@ -13,7 +13,7 @@ import {
   Terminal,
   Search,
 } from 'lucide-react';
-import { settingsApi, backupApi, playlistApi } from '../../api/client';
+import { settingsApi, backupApi, playlistApi, versionApi } from '../../api/client';
 import SettingsHeader from './components/SettingsHeader';
 import SettingsNav from './components/SettingsNav';
 import RestoreBackupModal from './components/RestoreBackupModal';
@@ -95,7 +95,12 @@ const DEFAULT_FORM_STATE = {
   captcha_secret_key: '',
 };
 
-export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed }) {
+export default function SettingsDashboard({
+  playlists = [],
+  onPlaylistsRefreshed,
+  versionInfo: initialVersionInfo,
+  onVersionRefreshed,
+}) {
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
 
@@ -119,6 +124,29 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
   const [saving, setSaving] = React.useState(false);
   const [clearingCacheScope, setClearingCacheScope] = React.useState(null);
   const [searchFilter, setSearchFilter] = React.useState('');
+  const [checkingUpdate, setCheckingUpdate] = React.useState(false);
+
+  const activeVersionInfo = data?.version_info || initialVersionInfo;
+
+  const handleCheckUpdate = async () => {
+    try {
+      setCheckingUpdate(true);
+      const res = await versionApi.checkUpdate(true);
+      if (res) {
+        setData((prev) => ({ ...prev, version_info: res }));
+        onVersionRefreshed?.(true);
+        if (res.update_available) {
+          notify(`New dashboard version available: v${res.latest_version}`, 'info');
+        } else {
+          notify('Dashboard is up to date!', 'success');
+        }
+      }
+    } catch (err) {
+      notify(err.message || 'Failed to check for updates', 'error');
+    } finally {
+      setCheckingUpdate(false);
+    }
+  };
 
   // Live Settings Search Engine
   const searchResult = React.useMemo(() => {
@@ -1019,7 +1047,8 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
       subtitle: 'System Health & Support Bundle',
       desc: 'Inspect live host metrics, process memory, database pool status, runtime logs, and export a diagnostic bundle.',
       icon: Terminal,
-      badgeColor: 'bg-amber-100 dark:bg-amber-950 text-amber-600',
+      badge: activeVersionInfo?.update_available ? 'Update' : null,
+      badgeColor: activeVersionInfo?.update_available ? 'bg-blue-100 dark:bg-blue-950 text-blue-600 dark:text-blue-400 font-bold animate-pulse' : 'bg-amber-100 dark:bg-amber-950 text-amber-600',
     },
   ];
 
@@ -1064,6 +1093,7 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
           searchQuery={searchFilter}
           onSearchChange={setSearchFilter}
           totalMatches={totalMatches}
+          versionInfo={activeVersionInfo}
         />
 
         {/* 2-Column Responsive Category Layout */}
@@ -1259,7 +1289,13 @@ export default function SettingsDashboard({ playlists = [], onPlaylistsRefreshed
                 )}
 
                 {activeTab === 'diagnostics' && (
-                  <DiagnosticsTab notify={notify} searchFilter={searchFilter} />
+                  <DiagnosticsTab
+                    notify={notify}
+                    searchFilter={searchFilter}
+                    versionInfo={activeVersionInfo}
+                    onCheckUpdate={handleCheckUpdate}
+                    checkingUpdate={checkingUpdate}
+                  />
                 )}
               </>
             )}

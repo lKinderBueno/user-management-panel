@@ -20,12 +20,13 @@ import ProviderEditor from '../components/ProviderEditor';
 import CalendarPicker from '../components/CalendarPicker';
 import { PageHeader } from '../components/ui';
 import { sanitizePatterns } from '../utils/patterns';
+import { syncProviderData } from '../utils/providerSync';
 
 
 const STORAGE_COPY_CREDS_KEY = 'wizard_copy_creds_to_provider';
 const STORAGE_SYNC_EXPIRY_KEY = 'wizard_sync_expiry_date';
 
-export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCancel }) {
+export default function CreateUserWizard({ currentPlaylist, playlists = [], onUserCreated, onCancel }) {
   const [currentStep, setCurrentStep] = React.useState(1);
 
   // Form State
@@ -267,7 +268,20 @@ export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCan
       };
 
       const newUser = await userApi.createUser(currentPlaylist.id, payload);
-      onUserCreated(newUser);
+
+      let finalUser = newUser;
+      if (syncExpiryDate) {
+        try {
+          const syncRes = await syncProviderData(newUser, currentPlaylist, { playlists });
+          if (syncRes?.user) {
+            finalUser = syncRes.user;
+          }
+        } catch (syncErr) {
+          console.warn('[CreateUserWizard] Post-creation provider sync notice:', syncErr?.message || syncErr);
+        }
+      }
+
+      onUserCreated(finalUser);
     } catch (err) {
       setError(err.message || 'Error creating user');
     } finally {
@@ -701,7 +715,7 @@ export default function CreateUserWizard({ currentPlaylist, onUserCreated, onCan
               className="flex items-center gap-1.5 px-5 py-2 bg-[#2dce89] hover:bg-[#26af74] text-white font-semibold rounded text-xs shadow-argon-btn transition active:scale-[0.98] disabled:opacity-50"
             >
               {submitting ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Check className="w-3.5 h-3.5" />}
-              <span>Create User</span>
+              <span>{submitting ? 'Creating User...' : 'Create User'}</span>
             </button>
           )}
         </div>

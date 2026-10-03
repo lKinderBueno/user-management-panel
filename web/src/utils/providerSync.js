@@ -40,13 +40,15 @@ export function resolveXtreamTarget(user, playlist, playlists = []) {
 
   const { patterns } = getEffectiveUserPatterns(user, effectivePlaylist);
   const xtreamPattern = (patterns || []).find(
-    (p) => (!p.type || p.type.toLowerCase() === 'xtream') && (p.url || p.curl)
+    (p) => (!p.type || p.type.toLowerCase() === 'xtream') && (p.url || p.cUrl || p.curl)
   );
 
   if (!xtreamPattern) return null;
 
-  const targetUrl = (xtreamPattern.use_curl && xtreamPattern.curl?.trim())
-    ? xtreamPattern.curl.trim()
+  const shouldUseCurl = xtreamPattern.useCUrl || xtreamPattern.use_curl;
+  const curlValue = (xtreamPattern.cUrl || xtreamPattern.curl || '').trim();
+  const targetUrl = (shouldUseCurl && curlValue)
+    ? curlValue
     : (xtreamPattern.url || '').trim();
 
   if (!targetUrl) return null;

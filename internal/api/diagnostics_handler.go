@@ -15,6 +15,7 @@ import (
 	"playlistlabs_user_management_os/internal/cache"
 	"playlistlabs_user_management_os/internal/logger"
 	"playlistlabs_user_management_os/internal/repository"
+	"playlistlabs_user_management_os/internal/version"
 )
 
 var processStartTime = time.Now()
@@ -51,6 +52,7 @@ type SystemInfo struct {
 	OS             string         `json:"os"`
 	Arch           string         `json:"arch"`
 	GoVersion      string         `json:"go_version"`
+	Version        string         `json:"version,omitempty"`
 	NumCPU         int            `json:"num_cpu"`
 	NumGoroutine   int            `json:"num_goroutine"`
 	UptimeSeconds  int64          `json:"uptime_seconds"`
@@ -102,6 +104,7 @@ func (h *DiagnosticsHandler) collectSystemInfo(ctx context.Context) SystemInfo {
 		OS:             runtime.GOOS,
 		Arch:           runtime.GOARCH,
 		GoVersion:      runtime.Version(),
+		Version:        version.GetVersion(),
 		NumCPU:         runtime.NumCPU(),
 		NumGoroutine:   runtime.NumGoroutine(),
 		UptimeSeconds:  int64(now.Sub(processStartTime).Seconds()),

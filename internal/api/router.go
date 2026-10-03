@@ -28,6 +28,7 @@ import (
 	"playlistlabs_user_management_os/internal/tmdb"
 	"playlistlabs_user_management_os/internal/tracking"
 	"playlistlabs_user_management_os/internal/usersyncer"
+	"playlistlabs_user_management_os/internal/version"
 
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
@@ -285,7 +286,8 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		}
 
 		_ = json.NewEncoder(w).Encode(map[string]any{
-			"status": overallStatus,
+			"status":  overallStatus,
+			"version": version.GetVersion(),
 			"components": map[string]any{
 				"database":   dbInfo,
 				"cache":      cacheInfo,
@@ -296,6 +298,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	}
 	r.Get("/health", healthHandler)
 	r.Get("/health/", healthHandler)
+
+	// Public Version endpoint
+	versionHandler := func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json; charset=utf-8")
+		_ = json.NewEncoder(w).Encode(version.GetInfo())
+	}
+	r.Get("/version", versionHandler)
+	r.Get("/version/", versionHandler)
 
 	// Public Documentation Viewer
 	r.Get("/docs", HandleDocs)
@@ -313,6 +323,10 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		// Public Health Check
 		r.Get("/health", healthHandler)
 		r.Get("/health/", healthHandler)
+
+		// Public Version Info
+		r.Get("/version", versionHandler)
+		r.Get("/version/", versionHandler)
 
 		// Public Auth
 		r.Get("/auth/captcha", authHandler.GetCaptcha)
@@ -513,6 +527,14 @@ func NewRouter(cfg RouterConfig) http.Handler {
 				adminSub.Get("/admin/diagnostics/system", diagHandler.GetSystemInfo)
 				adminSub.Get("/admin/diagnostics/logs", diagHandler.GetRecentLogs)
 				adminSub.Get("/admin/diagnostics/bundle", diagHandler.DownloadBundle)
+
+				// Version & Update Status (Pure admin only)
+				adminSub.Get("/admin/version", func(w http.ResponseWriter, r *http.Request) {
+					w.Header().Set("Content-Type", "application/json; charset=utf-8")
+					force := r.URL.Query().Get("refresh") == "true"
+					info := version.CheckUpdate(r.Context(), force)
+					_ = json.NewEncoder(w).Encode(info)
+				})
 			})
 
 			// Playlists & Sync Engine
@@ -571,6 +593,18 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		}
 	}
 
+	xtreamURL := os.Getenv("XTREAM_SERVER_URL")
+	if xtreamURL == "" {
+		xtreamURL = os.Getenv("XTREAM_URL")
+	}
+
+	var xtreamProxy *httputil.ReverseProxy
+	if xtreamURL != "" {
+		if parsedURL, err := url.Parse(xtreamURL); err == nil {
+			xtreamProxy = httputil.NewSingleHostReverseProxy(parsedURL)
+		}
+	}
+
 	serveStatic := func(w http.ResponseWriter, r *http.Request) {
 		if cfg.StaticDir == "" {
 			http.NotFound(w, r)
@@ -579,6 +613,36 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		path := filepath.Join(cfg.StaticDir, r.URL.Path)
 		info, err := os.Stat(path)
 		if os.IsNotExist(err) || (err == nil && info.IsDir()) {
+			p := strings.ToLower(r.URL.Path)
+			trimmed := strings.Trim(r.URL.Path, "/")
+			cleanToken := strings.TrimSuffix(strings.TrimSuffix(strings.TrimSuffix(trimmed, ".m3u"), ".xml"), ".xml.gz")
+			cleanToken = strings.Trim(cleanToken, "/")
+
+			hasStreamExt := strings.HasSuffix(p, ".m3u") || strings.HasSuffix(p, ".m3u8") || strings.HasSuffix(p, ".xml") || strings.HasSuffix(p, ".xml.gz")
+			q := r.URL.Query()
+			hasStreamQuery := q.Has("channels") || q.Has("series") || q.Has("movies") || q.Has("vods")
+			ua := strings.ToLower(r.UserAgent())
+			isPlayerUA := strings.Contains(ua, "vlc") || strings.Contains(ua, "kodi") ||
+				strings.Contains(ua, "tivimate") || strings.Contains(ua, "iptv") ||
+				strings.Contains(ua, "player") || strings.Contains(ua, "ffmpeg") ||
+				strings.Contains(ua, "mpv") || strings.Contains(ua, "curl") || strings.Contains(ua, "wget")
+
+			isToken := false
+			if cfg.UserRepo != nil && cleanToken != "" && !strings.Contains(cleanToken, "/") && !security.IsAdminRoute(r.URL.Path) {
+				if taken, err := cfg.UserRepo.IsTokenTaken(r.Context(), cleanToken, 0, 0); err == nil && taken {
+					isToken = true
+				}
+			}
+
+			if isToken || hasStreamExt || hasStreamQuery || (isPlayerUA && !security.IsAdminRoute(r.URL.Path)) {
+				if xtreamProxy != nil {
+					xtreamProxy.ServeHTTP(w, r)
+					return
+				}
+				http.NotFound(w, r)
+				return
+			}
+
 			http.ServeFile(w, r, filepath.Join(cfg.StaticDir, "index.html"))
 			return
 		}

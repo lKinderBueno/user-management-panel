@@ -19,6 +19,7 @@ export default function SettingsHeader({
   searchQuery = '',
   onSearchChange,
   totalMatches,
+  versionInfo,
 }) {
   const currentTabObj = tabs.find((t) => t.id === activeTab) || tabs[0];
 
@@ -37,6 +38,24 @@ export default function SettingsHeader({
       }
       badge={
         <div className="flex items-center gap-1.5 flex-wrap">
+          {versionInfo?.version && (
+            <span className="text-xs px-2 py-0.5 rounded-[0.375rem] font-mono font-semibold bg-slate-100 dark:bg-slate-800 text-[#525f7f] dark:text-slate-300 border border-slate-200 dark:border-slate-700">
+              v{versionInfo.version}
+            </span>
+          )}
+
+          {versionInfo?.update_available && (
+            <a
+              href={versionInfo.changelog_url || 'https://guide-ump.playlistlabs.io/changelog/'}
+              target="_blank"
+              rel="noopener noreferrer"
+              className="text-xs px-2 py-0.5 rounded-[0.375rem] font-medium bg-blue-50 dark:bg-blue-950/60 text-blue-600 dark:text-blue-400 border border-blue-200 dark:border-blue-800 flex items-center gap-1 hover:underline"
+              title="Click to view release notes and changelog"
+            >
+              <span className="w-1.5 h-1.5 rounded-full bg-blue-500 animate-pulse"></span>
+              Update Available (v{versionInfo.latest_version})
+            </a>
+          )}
 
           {isDirty && (
             <span className="text-xs px-2 py-0.5 rounded-[0.375rem] font-medium bg-amber-50 dark:bg-amber-950/60 text-amber-600 dark:text-amber-400 border border-amber-300 dark:border-amber-700/50 flex items-center gap-1 animate-pulse">
