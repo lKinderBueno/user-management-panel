@@ -398,21 +398,21 @@ fi
 if [ "$IS_UPGRADE" -eq 1 ] && [ -f secrets/db_password.txt ]; then
     if [ -z "$GIVEN_DB_PASS" ]; then
         echo -e "  ${GREEN}✓ Existing database credentials preserved in secrets/db_password.txt${NC}"
-        if [ "$IS_INTERACTIVE" -eq 1 ]; then
-            prompt_user "Do you want to change the database passwords? [y/N]: " CHANGE_DB_PASS
-            if [[ "$CHANGE_DB_PASS" =~ ^[yY] ]]; then
-                prompt_user "Enter new password for MariaDB user 'playlistlabs': " USER_DB_PASS
-                if [ -n "$USER_DB_PASS" ]; then
-                    echo "$USER_DB_PASS" > secrets/db_password.txt
-                    echo -e "  ${GREEN}✓ Updated secrets/db_password.txt${NC}"
-                fi
-                prompt_user "Enter new MariaDB ROOT password: " USER_ROOT_PASS
-                if [ -n "$USER_ROOT_PASS" ]; then
-                    echo "$USER_ROOT_PASS" > secrets/db_root_password.txt
-                    echo -e "  ${GREEN}✓ Updated secrets/db_root_password.txt${NC}"
-                fi
-            fi
-        fi
+        #if [ "$IS_INTERACTIVE" -eq 1 ]; then
+        #    prompt_user "Do you want to change the database passwords? [y/N]: " CHANGE_DB_PASS
+        #    if [[ "$CHANGE_DB_PASS" =~ ^[yY] ]]; then
+        #        prompt_user "Enter new password for MariaDB user 'playlistlabs': " USER_DB_PASS
+        #        if [ -n "$USER_DB_PASS" ]; then
+        #            echo "$USER_DB_PASS" > secrets/db_password.txt
+        #            echo -e "  ${GREEN}✓ Updated secrets/db_password.txt${NC}"
+        #        fi
+        #        prompt_user "Enter new MariaDB ROOT password: " USER_ROOT_PASS
+        #        if [ -n "$USER_ROOT_PASS" ]; then
+        #            echo "$USER_ROOT_PASS" > secrets/db_root_password.txt
+        #            echo -e "  ${GREEN}✓ Updated secrets/db_root_password.txt${NC}"
+        #        fi
+        #    fi
+        #fi
     fi
 # Case 3: Fresh Install
 elif [ ! -f secrets/db_password.txt ] || [ ! -f secrets/db_root_password.txt ]; then

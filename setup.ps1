@@ -569,21 +569,22 @@ if ($GIVEN_DB_ROOT_PASS) {
 if ($IS_UPGRADE -and (Test-Path "secrets/db_password.txt")) {
     if (-not $GIVEN_DB_PASS) {
         Write-Host "  $Check Existing database credentials preserved in secrets/db_password.txt" -ForegroundColor Green
-        if ($IS_INTERACTIVE -eq 1) {
-            $changePass = Prompt-User "Do you want to change the database passwords? [y/N]: "
-            if ($changePass -match '^[yY]') {
-                $userPass = Prompt-User "Enter new password for MariaDB user 'playlistlabs': "
-                if ($userPass) {
-                    Write-CleanSecretFile "secrets/db_password.txt" $userPass
-                    Write-Host "  $Check Updated secrets/db_password.txt" -ForegroundColor Green
-                }
-                $rootPass = Prompt-User "Enter new MariaDB ROOT password: "
-                if ($rootPass) {
-                    Write-CleanSecretFile "secrets/db_root_password.txt" $rootPass
-                    Write-Host "  $Check Updated secrets/db_root_password.txt" -ForegroundColor Green
-                }
-            }
-        }
+        #if ($IS_INTERACTIVE -eq 1) {
+        #    $changePass = Prompt-User "Do you want to change the database passwords? [y/N]: "
+        #    if ($changePass -match '^[yY]') {
+        #        $userPass = Prompt-User "Enter new password for MariaDB user 'playlistlabs': "
+        #        if ($userPass) {
+        #            Write-CleanSecretFile "secrets/db_password.txt" $userPass
+        #            Write-Host "  $Check Updated secrets/db_password.txt" -ForegroundColor Green
+        #        }
+        #        $rootPass = Prompt-User "Enter new MariaDB ROOT password: "
+        #        if ($rootPass) {
+        #            Write-CleanSecretFile "secrets/db_root_password.txt" $rootPass
+        #            Write-Host "  $Check Updated secrets/db_root_password.txt" -ForegroundColor Green
+        #        }
+        #    }
+        #}
+        
     }
 } elseif (-not (Test-Path "secrets/db_password.txt") -or -not (Test-Path "secrets/db_root_password.txt")) {
     if ($IS_INTERACTIVE -eq 1) {
