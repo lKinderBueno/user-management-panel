@@ -599,13 +599,79 @@ func (r *StreamRepo) GetCategoryMap(ctx context.Context, listID uint64, tableNam
 	return cats, rows.Err()
 }
 
+// GetObsoleteCount returns the number of obsolete rows (last_seen_at < syncTime or NULL)
+// and the total number of rows for listID in tableName.
+func (r *StreamRepo) GetObsoleteCount(ctx context.Context, listID uint64, tableName string, syncTime time.Time) (int, int, error) {
+	validTables := map[string]bool{
+		"channels":            true,
+		"vods":                true,
+		"series":              true,
+		"series_episodes":     true,
+		"channels_categories": true,
+		"vods_categories":     true,
+		"series_categories":   true,
+	}
+	if !validTables[tableName] {
+		return 0, 0, fmt.Errorf("invalid table name for obsolete count: %s", tableName)
+	}
+
+	syncCutoff := syncTime.UTC().Truncate(time.Millisecond)
+	query := fmt.Sprintf(`
+		SELECT 
+			COUNT(*),
+			COALESCE(SUM(CASE WHEN last_seen_at < ? OR last_seen_at IS NULL THEN 1 ELSE 0 END), 0)
+		FROM %s
+		WHERE list_id = ?
+	`, tableName)
+
+	var total, toDelete int
+	if err := r.db.QueryRowContext(ctx, query, syncCutoff, listID).Scan(&total, &toDelete); err != nil {
+		return 0, 0, fmt.Errorf("failed counting obsolete streams for %s: %w", tableName, err)
+	}
+
+	return toDelete, total, nil
+}
+
+// GetTotalStreamsCounts returns the aggregated obsolete and total count across all stream tables (channels, vods, series, series_episodes).
+func (r *StreamRepo) GetTotalStreamsCounts(ctx context.Context, listID uint64, syncTime time.Time) (int, int, error) {
+	tables := []string{"channels", "vods", "series", "series_episodes"}
+	var totalAll, toDeleteAll int
+	for _, tbl := range tables {
+		del, tot, err := r.GetObsoleteCount(ctx, listID, tbl, syncTime)
+		if err != nil {
+			return 0, 0, err
+		}
+		totalAll += tot
+		toDeleteAll += del
+	}
+	return toDeleteAll, totalAll, nil
+}
+
+// GetTotalCategoriesCounts returns the aggregated obsolete and total count across all category tables (channels_categories, vods_categories, series_categories).
+func (r *StreamRepo) GetTotalCategoriesCounts(ctx context.Context, listID uint64, syncTime time.Time) (int, int, error) {
+	tables := []string{"channels_categories", "vods_categories", "series_categories"}
+	var totalAll, toDeleteAll int
+	for _, tbl := range tables {
+		del, tot, err := r.GetObsoleteCount(ctx, listID, tbl, syncTime)
+		if err != nil {
+			return 0, 0, err
+		}
+		totalAll += tot
+		toDeleteAll += del
+	}
+	return toDeleteAll, totalAll, nil
+}
+
 // GetStreamCount returns the count of streams in tableName for the given listID.
 func (r *StreamRepo) GetStreamCount(ctx context.Context, listID uint64, tableName string) (int, error) {
 	validTables := map[string]bool{
-		"channels":        true,
-		"vods":            true,
-		"series":          true,
-		"series_episodes": true,
+		"channels":            true,
+		"vods":                true,
+		"series":              true,
+		"series_episodes":     true,
+		"channels_categories": true,
+		"vods_categories":     true,
+		"series_categories":   true,
 	}
 	if !validTables[tableName] {
 		return 0, fmt.Errorf("invalid streams table name: %s", tableName)

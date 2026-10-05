@@ -177,6 +177,11 @@ type Playlist struct {
 	ActiveMovies         FlexibleInt     `json:"active_movies"`
 	ActiveVod            FlexibleInt     `json:"active_vod"`
 	ActiveSeries         FlexibleInt     `json:"active_series"`
+	Status               *string         `json:"status,omitempty"`
+	IsEnabled            *FlexibleBool   `json:"is_enabled,omitempty"`
+	Enabled              *FlexibleBool   `json:"enabled,omitempty"`
+	IsActive             *FlexibleBool   `json:"is_active,omitempty"`
+	Active               *FlexibleBool   `json:"active,omitempty"`
 }
 
 // GetActiveMovies returns ActiveMovies or falls back to ActiveVod.

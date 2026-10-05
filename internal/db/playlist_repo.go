@@ -248,6 +248,22 @@ func (r *PlaylistRepo) GetPlaylistSummary(ctx context.Context, id uint64) (*Play
 	return &s, nil
 }
 
+// GetPlaylistExpiry retrieves the expiry timestamp for a playlist by ID.
+func (r *PlaylistRepo) GetPlaylistExpiry(ctx context.Context, id uint64) (*time.Time, error) {
+	query := `SELECT expiry FROM playlists WHERE id = ?`
+	var exp sql.NullTime
+	if err := r.db.QueryRowContext(ctx, query, id).Scan(&exp); err != nil {
+		if errors.Is(err, sql.ErrNoRows) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	if exp.Valid {
+		return &exp.Time, nil
+	}
+	return nil, nil
+}
+
 // MarkOrphaned updates the is_orphaned flag and timestamp for a playlist.
 func (r *PlaylistRepo) MarkOrphaned(ctx context.Context, id uint64, orphaned bool) error {
 	orphanedVal := 0

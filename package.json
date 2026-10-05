@@ -1,6 +1,6 @@
 {
   "name": "playlistlabs_user_management_os",
-  "version": "1.0.0",
+  "version": "1.0.6",
   "private": true,
   "scripts": {
     "dev": "npx concurrently -n \"GO_SERVER,VITE_WEB\" -c \"cyan,magenta\" \"npm run dev:server:watch\" \"npm run dev:web\"",

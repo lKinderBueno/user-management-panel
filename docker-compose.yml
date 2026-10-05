@@ -78,6 +78,7 @@ services:
       redis:
         condition: service_healthy
     environment:
+      APP_VERSION: ${APP_VERSION:-}
       MARIADB_HOST: mariadb
       MARIADB_PORT: 3306
       MARIADB_USER: ${MARIADB_USER:-playlistlabs}

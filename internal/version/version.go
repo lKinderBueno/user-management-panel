@@ -16,8 +16,8 @@ import (
 
 var (
 	// Version is injected during compilation via -ldflags:
-	// -ldflags="-s -w -X 'playlistlabs_user_management_os/internal/version.Version=1.0.0'"
-	Version = "1.0.0"
+	// -ldflags="-s -w -X 'playlistlabs_user_management_os/internal/version.Version=1.0.6'"
+	Version = "1.0.6"
 
 	// BuildDate is optionally injected at build time.
 	BuildDate = ""
@@ -47,15 +47,15 @@ type Info struct {
 	CheckedAt       time.Time `json:"checked_at"`
 }
 
-// GetVersion returns the effective version, prioritizing the APP_VERSION environment variable if set.
+// GetVersion returns the effective version, prioritizing the APP_VERSION environment variable if set and not "latest".
 func GetVersion() string {
-	if envVer := os.Getenv("APP_VERSION"); strings.TrimSpace(envVer) != "" {
+	if envVer := os.Getenv("APP_VERSION"); strings.TrimSpace(envVer) != "" && !strings.EqualFold(strings.TrimSpace(envVer), "latest") {
 		return cleanVersion(envVer)
 	}
-	if Version != "" {
+	if Version != "" && !strings.EqualFold(strings.TrimSpace(Version), "latest") {
 		return cleanVersion(Version)
 	}
-	return "1.0.0"
+	return "1.0.6"
 }
 
 func cleanVersion(v string) string {
@@ -68,6 +68,9 @@ func cleanVersion(v string) string {
 // IsNewer reports whether remoteVersion is strictly newer than currentVersion.
 func IsNewer(currentVersion, remoteVersion string) bool {
 	if strings.TrimSpace(currentVersion) == "" || strings.TrimSpace(remoteVersion) == "" {
+		return false
+	}
+	if strings.EqualFold(strings.TrimSpace(currentVersion), "latest") {
 		return false
 	}
 	cParts, cPre := parseSemver(currentVersion)
