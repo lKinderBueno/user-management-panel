@@ -212,6 +212,15 @@ func (a *Authenticator) Middleware(next http.Handler) http.Handler {
 				}
 				isAPIToken = false
 			}
+		} else if r.Method == http.MethodGet && r.URL.Query().Get("token") != "" {
+			tokenStr = strings.TrimSpace(r.URL.Query().Get("token"))
+			if strings.HasPrefix(tokenStr, "plt_") {
+				w.Header().Set("Content-Type", "application/json")
+				w.WriteHeader(http.StatusUnauthorized)
+				_, _ = w.Write([]byte(`{"error":"unauthorized","message":"API tokens must be provided via the X-API-Token header"}`))
+				return
+			}
+			isAPIToken = false
 		}
 
 		if tokenStr == "" {

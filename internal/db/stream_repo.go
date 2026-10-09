@@ -9,6 +9,7 @@ import (
 	"time"
 
 	"playlistlabs_user_management_os/internal/client"
+	"playlistlabs_user_management_os/internal/util"
 )
 
 // StreamRepo provides methods to persist categories and streams.
@@ -684,6 +685,7 @@ func (r *StreamRepo) GetStreamCount(ctx context.Context, listID uint64, tableNam
 
 // GetDistinctEpgIDsForPlaylists returns unique, non-empty EPG identifiers across the given playlists.
 // If playlistIDs is empty, it returns distinct EPG identifiers across all channels in the database.
+// It excludes dummy EPG identifiers ("dummy.epg" and "dummy-<id>") that are generated locally.
 func (r *StreamRepo) GetDistinctEpgIDsForPlaylists(ctx context.Context, playlistIDs ...uint64) ([]string, error) {
 	var query string
 	var args []interface{}
@@ -697,14 +699,14 @@ func (r *StreamRepo) GetDistinctEpgIDsForPlaylists(ctx context.Context, playlist
 		query = fmt.Sprintf(`
 			SELECT DISTINCT epg
 			FROM channels
-			WHERE list_id IN (%s) AND epg IS NOT NULL
+			WHERE list_id IN (%s) AND epg IS NOT NULL AND epg != '' AND epg != 'dummy.epg' AND epg NOT LIKE 'dummy-%%'
 			ORDER BY epg ASC
 		`, strings.Join(placeholders, ","))
 	} else {
 		query = `
 			SELECT DISTINCT epg
 			FROM channels
-			WHERE epg IS NOT NULL
+			WHERE epg IS NOT NULL AND epg != '' AND epg != 'dummy.epg' AND epg NOT LIKE 'dummy-%%'
 			ORDER BY epg ASC
 		`
 	}
@@ -720,7 +722,7 @@ func (r *StreamRepo) GetDistinctEpgIDsForPlaylists(ctx context.Context, playlist
 		var id string
 		if err := rows.Scan(&id); err == nil {
 			id = strings.TrimSpace(id)
-			if id != "" {
+			if id != "" && !strings.EqualFold(id, "dummy.epg") && !util.IsDummyStreamID(id) {
 				ids = append(ids, id)
 			}
 		}
@@ -753,7 +755,7 @@ func (r *StreamRepo) GetEpgCatchupMap(ctx context.Context, playlistIDs ...uint64
 		query = fmt.Sprintf(`
 			SELECT epg, MAX(CASE WHEN catchup > 0 THEN catchup ELSE 0 END) AS max_catchup
 			FROM channels
-			WHERE epg IS NOT NULL AND epg != '' AND epg != 'dummy.epg'
+			WHERE epg IS NOT NULL AND epg != '' AND epg != 'dummy.epg' AND epg NOT LIKE 'dummy-%%'
 			  AND list_id IN (%s)
 			GROUP BY epg
 		`, strings.Join(placeholders, ","))
@@ -761,7 +763,7 @@ func (r *StreamRepo) GetEpgCatchupMap(ctx context.Context, playlistIDs ...uint64
 		query = `
 			SELECT epg, MAX(CASE WHEN catchup > 0 THEN catchup ELSE 0 END) AS max_catchup
 			FROM channels
-			WHERE epg IS NOT NULL AND epg != '' AND epg != 'dummy.epg'
+			WHERE epg IS NOT NULL AND epg != '' AND epg != 'dummy.epg' AND epg NOT LIKE 'dummy-%%'
 			GROUP BY epg
 		`
 	}
@@ -778,7 +780,7 @@ func (r *StreamRepo) GetEpgCatchupMap(ctx context.Context, playlistIDs ...uint64
 		var maxCatchup int
 		if err := rows.Scan(&id, &maxCatchup); err == nil {
 			id = strings.TrimSpace(id)
-			if id != "" {
+			if id != "" && !strings.EqualFold(id, "dummy.epg") && !util.IsDummyStreamID(id) {
 				if maxCatchup > 14 {
 					maxCatchup = 14
 				}

@@ -14,6 +14,8 @@ import (
 	"strings"
 	"sync"
 	"time"
+
+	"playlistlabs_user_management_os/internal/util"
 )
 
 // ErrDataUnchanged is returned when the remote server reports 429 Data Unchanged (within 120s cooldown on offset=0).
@@ -708,8 +710,24 @@ func (c *APIClient) GetAllSeriesEpisodes(ctx context.Context, playlistID uint64,
 	return allEpisodes, nil
 }
 
+// FilterNonDummyEpgIDs removes dummy.epg and dummy-<id> from the requested IDs.
+func FilterNonDummyEpgIDs(epgIDs []string) []string {
+	if len(epgIDs) == 0 {
+		return nil
+	}
+	clean := make([]string, 0, len(epgIDs))
+	for _, id := range epgIDs {
+		trimmed := strings.TrimSpace(id)
+		if trimmed != "" && !strings.EqualFold(trimmed, "dummy.epg") && !util.IsDummyStreamID(trimmed) {
+			clean = append(clean, trimmed)
+		}
+	}
+	return clean
+}
+
 // GetEPG calls POST /token/epg for the given slice of epg identifiers.
 func (c *APIClient) GetEPG(ctx context.Context, epgReq EpgRequest) ([]EpgProgramme, error) {
+	epgReq.EpgIDs = FilterNonDummyEpgIDs(epgReq.EpgIDs)
 	if len(epgReq.EpgIDs) == 0 {
 		return nil, nil
 	}
@@ -742,6 +760,11 @@ func (c *APIClient) GetEPGInChunks(ctx context.Context, epgIDs []string, days in
 
 // GetEPGInChunksWithDate is like GetEPGInChunks but allows specifying an explicit starting Unix timestamp date.
 func (c *APIClient) GetEPGInChunksWithDate(ctx context.Context, epgIDs []string, date int64, days int, onProgress ...func(processed int, total int)) ([]EpgProgramme, error) {
+	epgIDs = FilterNonDummyEpgIDs(epgIDs)
+	if len(epgIDs) == 0 {
+		return nil, nil
+	}
+
 	const chunkSize = 200
 	var allProgrammes []EpgProgramme
 	pacing := c.GetEpgPacingDelay()
@@ -812,6 +835,7 @@ func (c *APIClient) GetEPGInChunksWithDate(ctx context.Context, epgIDs []string,
 // GetEPGStatus calls POST /token/epg/status in batches of 1500 IDs.
 // It returns a map of epg_id -> max available stop unix timestamp.
 func (c *APIClient) GetEPGStatus(ctx context.Context, epgIDs []string) (map[string]int64, error) {
+	epgIDs = FilterNonDummyEpgIDs(epgIDs)
 	if len(epgIDs) == 0 {
 		return make(map[string]int64), nil
 	}
@@ -891,6 +915,7 @@ func (c *APIClient) GetEPGStatus(ctx context.Context, epgIDs []string) (map[stri
 
 // GetEpgChannels calls POST /token/epg/channels for the given slice of epg identifiers in chunks of 1500.
 func (c *APIClient) GetEpgChannels(ctx context.Context, epgIDs []string) ([]EpgChannelMeta, error) {
+	epgIDs = FilterNonDummyEpgIDs(epgIDs)
 	if len(epgIDs) == 0 {
 		return nil, nil
 	}

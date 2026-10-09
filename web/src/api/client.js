@@ -230,6 +230,47 @@ export const tokensApi = {
   }),
 };
 
+/**
+ * Safely triggers a file download in the browser, fully compatible with WebKit / Safari (macOS & iOS).
+ * 
+ * In WebKit/Safari, anchor clicks on blob URLs are processed asynchronously.
+ * Calling URL.revokeObjectURL() or removing the anchor element immediately after click()
+ * destroys the in-memory blob before WebKit's network process can read it, causing:
+ * "The operation couldn't be completed. (WebKitBlobResource error 1.)".
+ * 
+ * This helper:
+ * 1. Uses application/octet-stream so Safari doesn't attempt to open JSON/text inline.
+ * 2. Keeps the anchor element alive and delays URL.revokeObjectURL for 60 seconds.
+ */
+export function triggerFileDownload(blob, filename) {
+  if (!blob) return;
+
+  const isZip = blob.type === 'application/zip';
+  const downloadBlob = isZip ? blob : new Blob([blob], { type: 'application/octet-stream' });
+  const downloadUrl = window.URL.createObjectURL(downloadBlob);
+  const link = document.createElement('a');
+  link.style.display = 'none';
+  link.href = downloadUrl;
+  link.setAttribute('download', filename);
+  link.download = filename;
+  link.rel = 'noopener';
+
+  document.body.appendChild(link);
+  link.click();
+
+  // Safari (WebKit) needs the blob URL to remain active while the browser delegates
+  // the download to the native download manager and asks for confirmation if needed.
+  // Immediate revocation causes WebKitBlobResource error 1.
+  setTimeout(() => {
+    try {
+      if (link.parentNode) {
+        link.parentNode.removeChild(link);
+      }
+      window.URL.revokeObjectURL(downloadUrl);
+    } catch {}
+  }, 60000);
+}
+
 export const backupApi = {
   downloadBackup: async (listId = null, options = {}) => {
     const token = getToken();
@@ -238,6 +279,27 @@ export const backupApi = {
     if (options.include_token) params.append('include_token', 'true');
     if (options.include_team) params.append('include_team', 'true');
     if (listId) params.append('list_id', listId);
+
+    // In Safari, direct HTTP download via token query param completely bypasses
+    // WebKit blob limitations, pinned-tab restrictions, and WebKitBlobResource error 1.
+    const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    if (isSafari && token) {
+      params.append('token', token);
+      const query = `?${params.toString()}`;
+      const directUrl = listId ? `/api/playlists/${listId}/users/backup${query}` : `/api/admin/backup/users${query}`;
+      const link = document.createElement('a');
+      link.style.display = 'none';
+      link.href = directUrl;
+      link.setAttribute('download', '');
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        try {
+          if (link.parentNode) link.parentNode.removeChild(link);
+        } catch {}
+      }, 5000);
+      return;
+    }
 
     const query = params.toString() ? `?${params.toString()}` : '';
     const url = listId ? `/api/playlists/${listId}/users/backup${query}` : `/api/admin/backup/users${query}`;
@@ -260,14 +322,7 @@ export const backupApi = {
     }
 
     const blob = await res.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(downloadUrl);
+    triggerFileDownload(blob, filename);
   },
   restoreUsers: (payload, listId = null) => {
     const cleanId = listId != null && String(listId).trim() !== '' ? String(listId).trim() : null;
@@ -330,23 +385,37 @@ export const settingsApi = {
   },
   downloadStoredBackup: async (filename) => {
     const token = getToken();
+
+    // In Safari, direct HTTP download via token query param completely bypasses
+    // WebKit blob limitations, pinned-tab restrictions, and WebKitBlobResource error 1.
+    const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    if (isSafari && token) {
+      const directUrl = `/api/admin/settings/backups/download/${encodeURIComponent(filename)}?token=${encodeURIComponent(token)}`;
+      const link = document.createElement('a');
+      link.style.display = 'none';
+      link.href = directUrl;
+      link.setAttribute('download', filename);
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        try {
+          if (link.parentNode) link.parentNode.removeChild(link);
+        } catch {}
+      }, 5000);
+      return;
+    }
+
     const res = await fetch(`/api/admin/settings/backups/download/${encodeURIComponent(filename)}`, {
       headers: {
         Authorization: `Bearer ${token}`,
       },
     });
     if (!res.ok) {
-      throw new Error(`Download failed with status ${res.status}`);
+      const data = await res.json().catch(() => null);
+      throw new Error(data?.message || data?.error || `Download failed with status ${res.status}`);
     }
     const blob = await res.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.download = filename;
-    document.body.appendChild(link);
-    link.click();
-    document.body.removeChild(link);
-    window.URL.revokeObjectURL(downloadUrl);
+    triggerFileDownload(blob, filename);
   },
   deleteBackup: (filename) => apiFetch(`/admin/settings/backups/${encodeURIComponent(filename)}`, {
     method: 'DELETE',
@@ -495,6 +564,26 @@ export const diagnosticsApi = {
   getLogs: (limit = 100) => apiFetch(`/admin/diagnostics/logs?limit=${limit}`),
   downloadBundle: async () => {
     const token = getToken();
+
+    // In Safari, direct HTTP download via token query param completely bypasses
+    // WebKit blob limitations, pinned-tab restrictions, and WebKitBlobResource error 1.
+    const isSafari = typeof navigator !== 'undefined' && /^((?!chrome|android).)*safari/i.test(navigator.userAgent);
+    if (isSafari && token) {
+      const directUrl = `/api/admin/diagnostics/bundle?token=${encodeURIComponent(token)}`;
+      const link = document.createElement('a');
+      link.style.display = 'none';
+      link.href = directUrl;
+      link.setAttribute('download', 'playlistlabs-diagnostics.zip');
+      document.body.appendChild(link);
+      link.click();
+      setTimeout(() => {
+        try {
+          if (link.parentNode) link.parentNode.removeChild(link);
+        } catch {}
+      }, 5000);
+      return;
+    }
+
     const res = await fetch('/api/admin/diagnostics/bundle', {
       headers: {
         Authorization: `Bearer ${token}`,
@@ -514,14 +603,7 @@ export const diagnosticsApi = {
     }
 
     const blob = await res.blob();
-    const downloadUrl = window.URL.createObjectURL(blob);
-    const link = document.createElement('a');
-    link.href = downloadUrl;
-    link.setAttribute('download', filename);
-    document.body.appendChild(link);
-    link.click();
-    link.parentNode.removeChild(link);
-    window.URL.revokeObjectURL(downloadUrl);
+    triggerFileDownload(blob, filename);
   },
 };
 

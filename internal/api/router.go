@@ -680,6 +680,31 @@ func NewRouter(cfg RouterConfig) http.Handler {
 		http.FileServer(http.Dir(cfg.StaticDir)).ServeHTTP(w, r)
 	}
 
+	// Explicit route for frontend build version checking (takes precedence over /{urlId} pattern routes)
+	r.Get("/build", func(w http.ResponseWriter, r *http.Request) {
+		if viteDevURL != "" {
+			if parsedURL, err := url.Parse(viteDevURL); err == nil {
+				proxy := httputil.NewSingleHostReverseProxy(parsedURL)
+				r.Host = parsedURL.Host
+				proxy.ServeHTTP(w, r)
+				return
+			}
+		}
+		if cfg.StaticDir != "" {
+			path := filepath.Join(cfg.StaticDir, "build")
+			info, err := os.Stat(path)
+			if err == nil && !info.IsDir() {
+				w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+				w.Header().Set("Cache-Control", "no-cache, no-store, must-revalidate")
+				w.Header().Set("Pragma", "no-cache")
+				w.Header().Set("Expires", "0")
+				http.ServeFile(w, r, path)
+				return
+			}
+		}
+		http.NotFound(w, r)
+	})
+
 	if viteDevURL != "" {
 		if parsedURL, err := url.Parse(viteDevURL); err == nil {
 			log.Printf("[INFO] Frontend dev proxy active -> proxying non-API traffic to Vite at %s", viteDevURL)
