@@ -42,19 +42,42 @@ export default function Navbar({
   const navigate = useNavigate();
   const location = useLocation();
   const [showProviderPopover, setShowProviderPopover] = React.useState(false);
+  const [showMobileProviderPopover, setShowMobileProviderPopover] = React.useState(false);
   const providerPopoverRef = React.useRef(null);
+  const providerButtonRef = React.useRef(null);
+  const mobileProviderPopoverRef = React.useRef(null);
+  const mobileProviderButtonRef = React.useRef(null);
 
   React.useEffect(() => {
     function handleClickOutside(e) {
-      if (providerPopoverRef.current && !providerPopoverRef.current.contains(e.target)) {
+      if (
+        providerPopoverRef.current && 
+        !providerPopoverRef.current.contains(e.target) &&
+        (!providerButtonRef.current || !providerButtonRef.current.contains(e.target))
+      ) {
         setShowProviderPopover(false);
       }
+      if (
+        mobileProviderPopoverRef.current && 
+        !mobileProviderPopoverRef.current.contains(e.target) &&
+        (!mobileProviderButtonRef.current || !mobileProviderButtonRef.current.contains(e.target))
+      ) {
+        setShowMobileProviderPopover(false);
+      }
     }
-    if (showProviderPopover) {
+    if (showProviderPopover || showMobileProviderPopover) {
       document.addEventListener('mousedown', handleClickOutside);
-      return () => document.removeEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('touchstart', handleClickOutside);
+      };
     }
-  }, [showProviderPopover]);
+  }, [showProviderPopover, showMobileProviderPopover]);
+
+  const hasActiveFilters = Boolean(
+    searchQuery || patternParam1 || patternParam2 || patternType || expiryPreset !== 'all' || expiryBeforeDate
+  );
 
   // Determine breadcrumb context based on current route
   const getBreadcrumbs = () => {
@@ -181,28 +204,48 @@ export default function Navbar({
           </button>
 
           {/* Breadcrumb path */}
-          <nav className="flex items-center gap-1.5 text-xs text-white/80 min-w-0" aria-label="Breadcrumb">
-            {breadcrumbs.map((crumb, idx) => {
-              const isLast = idx === breadcrumbs.length - 1;
-              return (
-                <React.Fragment key={idx}>
-                  {idx > 0 && <ChevronRight className="w-3.5 h-3.5 text-white/50 shrink-0" />}
-                  {crumb.path && !isLast ? (
-                    <button
-                      type="button"
-                      onClick={() => navigate(crumb.path)}
-                      className="hover:text-white transition truncate max-w-[140px] font-medium"
-                    >
-                      {crumb.label}
-                    </button>
-                  ) : (
-                    <span className={`truncate max-w-[180px] ${isLast ? 'text-white font-bold' : 'font-medium'}`}>
-                      {crumb.label}
-                    </span>
-                  )}
-                </React.Fragment>
-              );
-            })}
+          <nav className="flex items-center text-xs text-white/80 min-w-0" aria-label="Breadcrumb">
+            {/* Mobile compact breadcrumb (< sm) */}
+            <div className="flex sm:hidden items-center gap-1 min-w-0">
+              {breadcrumbs.length > 1 && (
+                <button
+                  type="button"
+                  onClick={() => navigate(breadcrumbs[breadcrumbs.length - 2]?.path || '/playlists')}
+                  className="p-1 rounded text-white/80 hover:text-white hover:bg-white/10 active:scale-95 transition"
+                  aria-label="Back"
+                >
+                  <ArrowLeft className="w-3.5 h-3.5" />
+                </button>
+              )}
+              <span className="truncate max-w-[130px] font-bold text-white text-xs">
+                {breadcrumbs[breadcrumbs.length - 1]?.label}
+              </span>
+            </div>
+
+            {/* Desktop full breadcrumb trail (sm+) */}
+            <div className="hidden sm:flex items-center gap-1.5 min-w-0">
+              {breadcrumbs.map((crumb, idx) => {
+                const isLast = idx === breadcrumbs.length - 1;
+                return (
+                  <React.Fragment key={idx}>
+                    {idx > 0 && <ChevronRight className="w-3.5 h-3.5 text-white/50 shrink-0" />}
+                    {crumb.path && !isLast ? (
+                      <button
+                        type="button"
+                        onClick={() => navigate(crumb.path)}
+                        className="hover:text-white transition truncate max-w-[140px] font-medium"
+                      >
+                        {crumb.label}
+                      </button>
+                    ) : (
+                      <span className={`truncate max-w-[180px] ${isLast ? 'text-white font-bold' : 'font-medium'}`}>
+                        {crumb.label}
+                      </span>
+                    )}
+                  </React.Fragment>
+                );
+              })}
+            </div>
           </nav>
 
           {/* User count pill when in dashboard */}
@@ -219,7 +262,7 @@ export default function Navbar({
         {isDashboardRoot && currentPlaylist && (
           <div className="hidden sm:flex flex-1 items-center justify-center gap-2 mx-2 min-w-0">
             {/* Search Input */}
-            <div className="relative flex items-center w-full max-w-[180px] md:max-w-[240px] lg:max-w-[280px]">
+            <div className="relative flex items-center w-full max-w-[260px] md:max-w-[320px] lg:max-w-[380px]">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-white/70 pointer-events-none shrink-0" />
               <input
                 type="text"
@@ -243,8 +286,9 @@ export default function Navbar({
             {/* Provider Params Popover */}
             <div className="relative shrink-0" ref={providerPopoverRef}>
               <button
+                ref={providerButtonRef}
                 type="button"
-                onClick={() => setShowProviderPopover(!showProviderPopover)}
+                onClick={() => setShowProviderPopover((prev) => !prev)}
                 className={`h-9 px-2.5 lg:px-3 rounded-xl border text-xs font-semibold flex items-center gap-1.5 transition active:scale-95 shadow-sm ${
                   showProviderPopover || patternParam1 || patternParam2 || patternType
                     ? 'bg-white text-[#3970e1] border-white shadow-md'
@@ -424,65 +468,196 @@ export default function Navbar({
 
       {/* Mobile Dedicated Toolbar Row (Visible only on < sm screens) */}
       {isDashboardRoot && currentPlaylist && (
-        <div className="flex sm:hidden items-center gap-1.5 px-3 pt-1 pb-2.5 border-t border-white/10 w-full">
-          {/* Mobile Search */}
-          <div className="relative flex-1 min-w-0">
-            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3 w-3 text-white/70 pointer-events-none" />
+        <div className="flex sm:hidden flex-col gap-2 px-3 pt-1.5 pb-2.5 border-t border-white/10 w-full relative">
+          {/* Row 1: Full-width spacious Search Input */}
+          <div className="relative w-full">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-white/70 pointer-events-none" />
             <input
               type="text"
               value={searchQuery}
               onChange={(e) => onSearchChange?.(e.target.value)}
-              placeholder="Search users..."
-              className="h-8 w-full rounded-lg border border-white/20 bg-white/15 pl-7 pr-6 text-xs text-white placeholder:text-white/70 outline-none focus:border-white focus:bg-white focus:text-[#32325d]"
+              placeholder="Search users by name, username, note..."
+              className="h-10 w-full rounded-xl border border-white/20 bg-white/15 pl-9 pr-9 text-xs text-white placeholder:text-white/70 outline-none transition focus:border-white focus:bg-white focus:text-[#32325d] focus:placeholder:text-slate-400"
             />
             {searchQuery && (
               <button
                 type="button"
                 onClick={() => onSearchChange?.('')}
-                className="absolute right-2 top-1/2 -translate-y-1/2 p-0.5 text-white/70 hover:text-[#32325d]"
+                className="absolute right-2.5 top-1/2 -translate-y-1/2 p-1 text-white/70 hover:text-[#32325d]"
+                title="Clear search"
               >
-                <X className="w-3 h-3" />
+                <X className="w-3.5 h-3.5" />
               </button>
             )}
           </div>
 
-          {/* Mobile Expiry Select */}
-          <div className="relative shrink-0">
-            <select
-              value={expiryPreset}
-              onChange={(e) => onExpiryPresetChange?.(e.target.value)}
-              className={`h-8 rounded-lg border pl-2 pr-6 text-xs font-semibold outline-none appearance-none ${
-                expiryPreset !== 'all'
-                  ? 'bg-white text-[#3970e1] border-white shadow-sm'
-                  : 'border-white/20 bg-white/15 text-white'
+          {/* Row 2: Status Filter + Provider Params + Reset */}
+          <div className="flex items-center gap-2 w-full">
+            {/* Mobile Expiry Select */}
+            <div className="relative flex-1 min-w-0">
+              <select
+                value={expiryPreset}
+                onChange={(e) => onExpiryPresetChange?.(e.target.value)}
+                className={`h-9 w-full rounded-lg border pl-2.5 pr-6 text-xs font-semibold outline-none appearance-none ${
+                  expiryPreset !== 'all'
+                    ? 'bg-white text-[#3970e1] border-white shadow-sm'
+                    : 'border-white/20 bg-white/15 text-white'
+                }`}
+              >
+                <option value="all" className="text-[#32325d]">All Statuses</option>
+                <option value="online" className="text-[#32325d]">{onlineCount > 0 ? `Online (${onlineCount})` : 'Online'}</option>
+                <option value="active" className="text-[#32325d]">Active</option>
+                <option value="expiring_7" className="text-[#32325d]">Exp 7 Days</option>
+                <option value="expiring_30" className="text-[#32325d]">Exp 30 Days</option>
+                <option value="expired" className="text-[#32325d]">Expired</option>
+                <option value="unlimited" className="text-[#32325d]">Unlimited</option>
+                <option value="custom" className="text-[#32325d]">Custom Date...</option>
+              </select>
+              <ChevronDown className="absolute right-2 top-1/2 -translate-y-1/2 w-3.5 h-3.5 pointer-events-none text-white/70" />
+            </div>
+
+            {/* Mobile Provider Params button */}
+            <button
+              ref={mobileProviderButtonRef}
+              type="button"
+              onClick={() => setShowMobileProviderPopover((prev) => !prev)}
+              className={`h-9 px-2.5 rounded-lg border text-xs font-semibold flex items-center gap-1.5 transition shrink-0 ${
+                showMobileProviderPopover || patternParam1 || patternParam2 || patternType
+                  ? 'bg-white text-[#3970e1] border-white shadow-sm font-bold'
+                  : 'bg-white/15 text-white border-white/20'
               }`}
+              title="Filter by source provider parameters"
             >
-              <option value="all" className="text-[#32325d]">All</option>
-              <option value="online" className="text-[#32325d]">{onlineCount > 0 ? `Online (${onlineCount})` : 'Online'}</option>
-              <option value="active" className="text-[#32325d]">Active</option>
-              <option value="expiring_7" className="text-[#32325d]">Exp 7d</option>
-              <option value="expired" className="text-[#32325d]">Expired</option>
-              <option value="unlimited" className="text-[#32325d]">Unlimited</option>
-            </select>
-            <ChevronDown className="absolute right-1.5 top-1/2 -translate-y-1/2 w-3 h-3 pointer-events-none text-white/70" />
+              <SlidersHorizontal className="w-3.5 h-3.5" />
+              <span>Provider</span>
+              {(patternParam1 || patternParam2 || patternType) && (
+                <span className="w-1.5 h-1.5 rounded-full bg-[#3970e1]" />
+              )}
+            </button>
+
+            {/* Mobile Reset Filters Button */}
+            {hasActiveFilters && (
+              <button
+                type="button"
+                onClick={onResetFilters}
+                className="h-9 px-2.5 rounded-lg bg-rose-500/80 hover:bg-rose-600 text-white text-xs font-semibold flex items-center gap-1 transition shrink-0"
+                title="Reset active filters"
+              >
+                <RotateCcw className="w-3 h-3" />
+                <span>Reset</span>
+              </button>
+            )}
           </div>
 
-          {/* Mobile Provider Params button */}
-          <button
-            type="button"
-            onClick={() => setShowProviderPopover(!showProviderPopover)}
-            className={`h-8 px-2 rounded-lg border text-xs font-semibold flex items-center gap-1 transition ${
-              showProviderPopover || patternParam1 || patternParam2 || patternType
-                ? 'bg-white text-[#3970e1] border-white'
-                : 'bg-white/15 text-white border-white/20'
-            }`}
-            title="Provider Params"
-          >
-            <SlidersHorizontal className="w-3 h-3" />
-            {(patternParam1 || patternParam2 || patternType) && (
-              <span className="w-1.5 h-1.5 rounded-full bg-[#3970e1]" />
-            )}
-          </button>
+          {/* Custom Date Input on mobile if expiryPreset === 'custom' */}
+          {expiryPreset === 'custom' && (
+            <div className="relative flex items-center w-full">
+              <input
+                type="date"
+                value={expiryBeforeDate}
+                onChange={(e) => onExpiryBeforeDateChange?.(e.target.value)}
+                className="h-8 w-full rounded-lg border border-white/30 bg-white text-xs text-[#32325d] px-2.5 outline-none font-semibold shadow-sm"
+                title="Filter users expiring before date"
+              />
+              {expiryBeforeDate && (
+                <button
+                  type="button"
+                  onClick={() => onExpiryBeforeDateChange?.('')}
+                  className="absolute right-2 p-0.5 text-gray-400 hover:text-gray-700"
+                >
+                  <X className="w-3.5 h-3.5" />
+                </button>
+              )}
+            </div>
+          )}
+
+          {/* Mobile Provider Params Dropdown Panel */}
+          {showMobileProviderPopover && (
+            <div
+              ref={mobileProviderPopoverRef}
+              className="w-full bg-white dark:bg-slate-900 rounded-xl shadow-xl border border-[#dee2e6] dark:border-slate-800 p-3 z-50 text-[#32325d] dark:text-slate-200 space-y-2.5 animate-in fade-in zoom-in-95 duration-100"
+            >
+              <div className="flex items-center justify-between border-b border-[#e9ecef] dark:border-slate-800 pb-2">
+                <div className="flex items-center gap-1.5">
+                  <SlidersHorizontal className="w-3.5 h-3.5 text-[#3970e1] dark:text-blue-400" />
+                  <span className="text-xs font-bold text-[#32325d] dark:text-white">Provider Parameters</span>
+                </div>
+                {(patternParam1 || patternParam2 || patternType) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      onPatternParam1Change?.('');
+                      onPatternParam2Change?.('');
+                      onPatternTypeChange?.('');
+                    }}
+                    className="text-xs text-[#f5365c] dark:text-rose-400 hover:underline font-semibold"
+                  >
+                    Reset
+                  </button>
+                )}
+              </div>
+
+              <div className="space-y-2">
+                <div>
+                  <label className="text-[11px] text-[#525f7f] dark:text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                    Provider Username / Key
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Search provider username..."
+                    value={patternParam1}
+                    onChange={(e) => onPatternParam1Change?.(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-lg text-xs text-[#32325d] dark:text-white placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1]"
+                  />
+                </div>
+
+                <div>
+                  <label className="text-[11px] text-[#525f7f] dark:text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                    Provider Password / Profile
+                  </label>
+                  <input
+                    type="text"
+                    placeholder="Search provider password..."
+                    value={patternParam2}
+                    onChange={(e) => onPatternParam2Change?.(e.target.value)}
+                    className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-lg text-xs text-[#32325d] dark:text-white placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1]"
+                  />
+                </div>
+
+                {availablePatternTypes.length > 0 && (
+                  <div>
+                    <label className="text-[11px] text-[#525f7f] dark:text-slate-400 font-bold uppercase tracking-wider block mb-1">
+                      Server Pattern Type
+                    </label>
+                    <select
+                      value={patternType}
+                      onChange={(e) => onPatternTypeChange?.(e.target.value)}
+                      className="w-full px-2.5 py-1.5 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-lg text-xs text-[#32325d] dark:text-white focus:outline-none focus:border-[#3970e1]"
+                    >
+                      <option value="">All patterns</option>
+                      {availablePatternTypes.map((pt) => (
+                        <option key={pt} value={pt}>{pt}</option>
+                      ))}
+                    </select>
+                  </div>
+                )}
+              </div>
+            </div>
+          )}
+
+          {/* Active Filter Indicator & Reset Button */}
+          {(searchQuery || patternParam1 || patternParam2 || patternType || expiryPreset !== 'all' || expiryBeforeDate) && (
+            <div className="flex items-center justify-between text-[11px] bg-white/10 rounded-md px-2 py-1">
+              <span className="text-white/80">Active filters applied</span>
+              <button
+                type="button"
+                onClick={onResetFilters}
+                className="text-white font-bold underline hover:text-white/80"
+              >
+                Reset all
+              </button>
+            </div>
+          )}
         </div>
       )}
     </header>

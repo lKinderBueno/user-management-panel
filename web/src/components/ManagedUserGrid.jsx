@@ -201,7 +201,25 @@ export default function ManagedUserGrid({
   // Scroll container refs for virtualization
   const tableContainerRef = React.useRef(null);
   const compactContainerRef = React.useRef(null);
+  const mobileContainerRef = React.useRef(null);
   const rowsRef = React.useRef([]);
+
+  // Mobile screen detection (< 768px)
+  const [isMobile, setIsMobile] = React.useState(() => {
+    if (typeof window !== 'undefined') {
+      return window.innerWidth < 768;
+    }
+    return false;
+  });
+
+  React.useEffect(() => {
+    if (typeof window === 'undefined') return;
+    const mql = window.matchMedia('(max-width: 767px)');
+    const handleResize = (e) => setIsMobile(e.matches);
+    mql.addEventListener('change', handleResize);
+    setIsMobile(mql.matches);
+    return () => mql.removeEventListener('change', handleResize);
+  }, []);
 
   // Quick lookup set for O(1) row selection check (supports 2000+ users seamlessly)
   const selectedSet = React.useMemo(() => new Set((selectedUserIds || []).map(String)), [selectedUserIds]);
@@ -1142,9 +1160,7 @@ export default function ManagedUserGrid({
   };
 
   // =========================================================================
-  // COMPACT VIEW (used specifically for Split View Left Column)
-  // Perfectly fits in a ~380-450px column without ANY horizontal scrollbar!
-  // Also virtualized with @tanstack/react-virtual for 2000 users!
+  // COMPACT & MOBILE VIEW VIRTUALIZERS
   // =========================================================================
   const compactVirtualizer = useVirtualizer({
     count: rows.length,
@@ -1152,6 +1168,290 @@ export default function ManagedUserGrid({
     estimateSize: () => 48,
     overscan: 10
   });
+
+  const mobileVirtualizer = useVirtualizer({
+    count: rows.length,
+    getScrollElement: () => mobileContainerRef.current,
+    estimateSize: () => 170,
+    overscan: 6
+  });
+
+  // Render a responsive, touch-optimized card for mobile view (< 768px)
+  const renderMobileUserCard = (u, rowIndex) => {
+    const isSelected = selectedSet.has(String(u.id));
+    const isActive = activeUserId != null && String(activeUserId) === String(u.id);
+
+    // Source provider summary
+    const pl = (playlists && playlists.find((p) => String(p.id) === String(u.list_id))) || currentPlaylist;
+    const { patterns } = getEffectiveUserPatterns(u, pl);
+    const providerSummary = patterns.length > 0
+      ? (patterns[0].cUrl || patterns[0].url ? resolveProtocolHost(patterns[0].cUrl || patterns[0].url) : patterns[0].type || 'Provider')
+      : null;
+
+    return (
+      <div
+        onClick={(e) => {
+          handleRowClick(u, e, rowIndex);
+          onEditUser?.(u);
+        }}
+        className={`rounded-xl border p-3.5 transition-all duration-150 select-none bg-white dark:bg-slate-900 shadow-sm cursor-pointer ${
+          isActive
+            ? 'border-[#3970e1] ring-2 ring-[#3970e1]/30 dark:ring-blue-500/30 bg-[#f4f7fe] dark:bg-blue-950/40'
+            : isSelected
+            ? 'border-[#3970e1]/70 bg-[#f4f7fe]/70 dark:bg-blue-950/20'
+            : 'border-[#e9ecef] dark:border-slate-800 hover:border-[#3970e1]/40'
+        }`}
+      >
+        {/* Top Header Row: Selection Checkbox + Name + Badges + ID/Conn */}
+        <div className="flex items-center justify-between gap-2 mb-2">
+          <div className="flex items-center gap-2.5 min-w-0 flex-1">
+            <div
+              className="p-1 -m-1 cursor-pointer flex items-center justify-center shrink-0"
+              onClick={(e) => {
+                e.stopPropagation();
+                handleCheckboxClick(u, e, rowIndex);
+              }}
+            >
+              <input
+                type="checkbox"
+                checked={isSelected}
+                readOnly
+                className="w-4 h-4 rounded border-[#dee2e6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#3970e1] focus:ring-0 pointer-events-none cursor-pointer"
+              />
+            </div>
+            <div className="font-semibold text-sm text-[#32325d] dark:text-slate-100 truncate">
+              {u.name}
+            </div>
+            {u.is_online && (
+              <span className="text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-[#e8faf1] dark:bg-emerald-950/60 text-[#2dce89] dark:text-emerald-400 border border-[#2dce89]/40 font-mono animate-pulse shrink-0">
+                LIVE
+              </span>
+            )}
+            {u.is_suspended && (
+              <span className="text-[10px] uppercase font-extrabold px-1.5 py-0.5 rounded bg-[#feecee] dark:bg-rose-950/60 text-[#f5365c] dark:text-rose-400 border border-[#f5365c]/40 font-mono shrink-0">
+                {u.is_compromised ? 'COMP' : 'SUSP'}
+              </span>
+            )}
+          </div>
+
+          <div className="flex items-center gap-2 shrink-0">
+            {renderConnections(u)}
+            <span className="font-mono text-xs text-[#8898aa] dark:text-slate-400">
+              #{u.id}
+            </span>
+          </div>
+        </div>
+
+        {/* Middle Row: Username + Copy + Expiry/Status */}
+        <div className="flex items-center justify-between gap-2 py-1.5 border-t border-[#f4f5f7] dark:border-slate-800/80 text-xs">
+          <div className="flex items-center gap-1.5 min-w-0 font-mono text-[#525f7f] dark:text-slate-300">
+            <span className="text-[#8898aa] dark:text-slate-500 font-normal">user:</span>
+            <span className="truncate font-semibold">{u.username}</span>
+            <CopyButton text={u.username} label="Username" />
+          </div>
+
+          <div className="shrink-0">
+            {renderStatusCompact(u.expiry, u)}
+          </div>
+        </div>
+
+        {/* Metadata Row: Provider summary & Creator */}
+        {(providerSummary || u.created_by_username) && (
+          <div className="flex items-center justify-between gap-2 pt-1 text-[11px] text-[#8898aa] dark:text-slate-400">
+            {providerSummary ? (
+              <span className="truncate max-w-[200px]" title={providerSummary}>
+                Source: <span className="font-medium text-[#525f7f] dark:text-slate-300">{providerSummary}</span>
+              </span>
+            ) : <span />}
+            {u.created_by_username && (
+              <span className="font-mono text-[#3970e1] dark:text-blue-300 bg-[#eef2ff] dark:bg-blue-950/60 border border-[#3970e1]/30 dark:border-blue-700/40 px-1 rounded shrink-0">
+                by {u.created_by_username}
+              </span>
+            )}
+          </div>
+        )}
+
+        {/* Bottom Actions Row: Generous touch targets for mobile */}
+        <div 
+          className="flex items-center justify-between gap-1.5 pt-2.5 mt-2 border-t border-[#f4f5f7] dark:border-slate-800/80"
+          onClick={(e) => e.stopPropagation()}
+        >
+          <button
+            type="button"
+            onClick={() => onShowInfo?.(u)}
+            className="flex-1 min-h-[38px] flex items-center justify-center gap-1 px-2 py-1.5 bg-[#f6f9fc] dark:bg-slate-800 hover:bg-[#eef2ff] dark:hover:bg-slate-700 text-[#525f7f] dark:text-slate-300 hover:text-[#3970e1] dark:hover:text-blue-400 rounded-lg border border-[#dee2e6] dark:border-slate-700 text-xs font-semibold transition active:scale-95 shadow-xs"
+            title="Streaming links, credentials, M3U and STB portal info"
+          >
+            <Info className="w-3.5 h-3.5 text-[#3970e1] dark:text-blue-400" />
+            <span>Links</span>
+          </button>
+
+          <button
+            type="button"
+            onClick={() => {
+              if (onSelectOnlyUser) onSelectOnlyUser(u.id);
+              onEditUser?.(u);
+            }}
+            className="flex-1 min-h-[38px] flex items-center justify-center gap-1 px-2 py-1.5 bg-[#eef2ff] dark:bg-blue-950/60 hover:bg-[#dbe4fe] dark:hover:bg-blue-900/60 text-[#3970e1] dark:text-blue-400 rounded-lg border border-[#3970e1]/30 dark:border-blue-700/40 text-xs font-bold transition active:scale-95 shadow-sm"
+            title="Edit user details (open editor)"
+          >
+            <Edit3 className="w-3.5 h-3.5" />
+            <span>Edit</span>
+          </button>
+
+          {onForceSync && (
+            <button
+              type="button"
+              onClick={() => onForceSync?.(u)}
+              disabled={syncingUserId === u.id}
+              className="w-10 min-h-[38px] flex items-center justify-center bg-[#f6f9fc] dark:bg-slate-800 hover:bg-[#e8faf1] dark:hover:bg-emerald-950/40 text-[#2dce89] dark:text-emerald-400 rounded-lg border border-[#dee2e6] dark:border-slate-700 transition active:scale-95 disabled:opacity-40"
+              title="Force sync provider data"
+            >
+              <RefreshCw className={`w-3.5 h-3.5 ${syncingUserId === u.id ? 'animate-spin' : ''}`} />
+            </button>
+          )}
+
+          {onToggleSuspension && (
+            <button
+              type="button"
+              onClick={() => onToggleSuspension?.(u)}
+              className={`w-10 min-h-[38px] flex items-center justify-center rounded-lg border transition active:scale-95 ${
+                u.is_suspended
+                  ? 'bg-[#feecee] dark:bg-rose-950/60 border-[#f5365c]/40 text-[#f5365c] dark:text-rose-400'
+                  : 'bg-[#f6f9fc] dark:bg-slate-800 border-[#dee2e6] dark:border-slate-700 text-[#525f7f] dark:text-slate-400 hover:text-[#f5365c]'
+              }`}
+              title={u.is_suspended ? 'Reactivate account' : 'Suspend account'}
+            >
+              {u.is_suspended ? (
+                <ShieldAlert className="w-3.5 h-3.5 text-[#f5365c] dark:text-rose-400 animate-pulse" />
+              ) : (
+                <Lock className="w-3.5 h-3.5" />
+              )}
+            </button>
+          )}
+
+          {onDeleteUser && (
+            <button
+              type="button"
+              onClick={() => onDeleteUser?.(u)}
+              className="w-10 min-h-[38px] flex items-center justify-center bg-[#f6f9fc] dark:bg-slate-800 hover:bg-[#feecee] dark:hover:bg-rose-950/60 text-[#8898aa] hover:text-[#f5365c] dark:text-slate-400 dark:hover:text-rose-400 rounded-lg border border-[#dee2e6] dark:border-slate-700 transition active:scale-95"
+              title="Delete user"
+            >
+              <Trash2 className="w-3.5 h-3.5" />
+            </button>
+          )}
+        </div>
+      </div>
+    );
+  };
+
+  // =========================================================================
+  // MOBILE VIEW (< 768px): Touch-friendly, zero-overflow user cards
+  // =========================================================================
+  if (isMobile) {
+    const mobileItems = mobileVirtualizer.getVirtualItems();
+
+    return (
+      <div className="space-y-2 select-none">
+        {/* Mobile Selection & Sort Toolbar */}
+        <div className="flex items-center justify-between px-3 py-2 bg-white dark:bg-slate-900 rounded-lg border border-[#e9ecef] dark:border-slate-800 shadow-sm text-xs">
+          <div className="flex items-center gap-2.5">
+            <label className="flex items-center gap-2 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                ref={(el) => el && (el.indeterminate = isSomeSelected)}
+                checked={isAllSelected}
+                onChange={() => onSelectAllVisible(users)}
+                className="w-4 h-4 rounded border-[#dee2e6] dark:border-slate-700 bg-white dark:bg-slate-800 text-[#3970e1] focus:ring-0 cursor-pointer"
+              />
+              <span className="font-semibold text-[#32325d] dark:text-slate-200">
+                {selectedUserIds.length > 0 ? (
+                  <span className="text-[#3970e1] dark:text-blue-400 font-bold">
+                    {selectedUserIds.length} selected
+                  </span>
+                ) : (
+                  <span>Select all ({rows.length})</span>
+                )}
+              </span>
+            </label>
+
+            {selectedUserIds.length > 0 && (
+              <button
+                type="button"
+                onClick={() => onClearSelection ? onClearSelection() : onToggleSelectId?.(null, null, [])}
+                className="text-[11px] text-[#f5365c] dark:text-rose-400 font-semibold px-2 py-0.5 rounded bg-[#feecee] dark:bg-rose-950/60 transition"
+              >
+                Clear
+              </button>
+            )}
+          </div>
+
+          {/* Quick Mobile Sort Dropdown */}
+          <div className="flex items-center gap-1.5">
+            <ArrowUpDown className="w-3.5 h-3.5 text-[#8898aa] dark:text-slate-400" />
+            <select
+              value={sorting[0]?.id || 'id'}
+              onChange={(e) => {
+                const val = e.target.value;
+                setSorting([{ id: val, desc: val === 'id' || val === 'connections' }]);
+              }}
+              className="py-1 px-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-medium text-[#525f7f] dark:text-slate-200 focus:outline-none focus:border-[#3970e1]"
+            >
+              <option value="id">Sort: ID</option>
+              <option value="user">Sort: User</option>
+              <option value="status">Sort: Status</option>
+              <option value="connections">Sort: Conn.</option>
+            </select>
+          </div>
+        </div>
+
+        {/* Mobile Cards Container */}
+        {rows.length === 0 ? (
+          <div className="py-12 text-center bg-white dark:bg-slate-900 rounded-xl border border-[#e9ecef] dark:border-slate-800 shadow-sm p-6 space-y-2">
+            <Users className="w-8 h-8 text-[#adb5bd] dark:text-slate-500 mx-auto opacity-50" />
+            <div className="text-xs font-semibold text-[#8898aa] dark:text-slate-400">
+              No users found matching your filters
+            </div>
+          </div>
+        ) : (
+          <div 
+            ref={mobileContainerRef} 
+            className="max-h-[calc(100dvh-230px)] overflow-y-auto select-none pr-0.5"
+          >
+            <div
+              style={{
+                height: `${mobileVirtualizer.getTotalSize()}px`,
+                width: '100%',
+                position: 'relative'
+              }}
+            >
+              {mobileItems.map((virtualRow) => {
+                const row = rows[virtualRow.index];
+                const u = row.original;
+                return (
+                  <div
+                    key={u.id}
+                    ref={mobileVirtualizer.measureElement}
+                    data-index={virtualRow.index}
+                    style={{
+                      position: 'absolute',
+                      top: 0,
+                      left: 0,
+                      width: '100%',
+                      transform: `translateY(${virtualRow.start}px)`
+                    }}
+                    className="pb-2.5"
+                  >
+                    {renderMobileUserCard(u, virtualRow.index)}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  }
 
   if (compact) {
     const compactItems = compactVirtualizer.getVirtualItems();

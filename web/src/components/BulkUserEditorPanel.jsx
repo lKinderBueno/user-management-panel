@@ -1,15 +1,16 @@
 import React from 'react';
-import { 
-  Users, 
-  Save, 
-  Trash2, 
-  ArrowRightLeft, 
-  FileText, 
-  Loader2, 
-  X, 
-  Calendar, 
-  Layers, 
-  CheckCircle2, 
+import {
+  Users,
+  Save,
+  Trash2,
+  ArrowRightLeft,
+  ArrowLeft,
+  FileText,
+  Loader2,
+  X,
+  Calendar,
+  Layers,
+  CheckCircle2,
   AlertCircle,
   HelpCircle,
   ShieldAlert,
@@ -126,20 +127,31 @@ export default function BulkUserEditorPanel({
       {/* Header with Selection Summary */}
       <div className="pb-3 border-b border-[#e9ecef] dark:border-slate-800">
         <div className="flex flex-wrap items-center justify-between gap-3">
-          <div className="flex items-center gap-2.5">
-            <div className="w-8 h-8 rounded-lg bg-[#eef2ff] dark:bg-blue-950/60 border border-[#3970e1]/30 dark:border-blue-700/40 flex items-center justify-center text-[#3970e1] dark:text-blue-400">
+          <div className="flex items-center gap-2.5 min-w-0">
+            {onClose && (
+              <button
+                type="button"
+                onClick={onClose}
+                className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f6f9fc] dark:bg-slate-800 hover:bg-[#eef2ff] dark:hover:bg-slate-700 text-[#3970e1] dark:text-blue-400 border border-[#dee2e6] dark:border-slate-700 rounded-lg text-xs font-bold transition active:scale-95 shadow-xs shrink-0"
+                title="Return to user list"
+              >
+                <ArrowLeft className="w-4 h-4" />
+                <span>Back</span>
+              </button>
+            )}
+            <div className="w-8 h-8 rounded-lg bg-[#eef2ff] dark:bg-blue-950/60 border border-[#3970e1]/30 dark:border-blue-700/40 flex items-center justify-center text-[#3970e1] dark:text-blue-400 shrink-0">
               <Users className="w-4 h-4" />
             </div>
-            <div>
+            <div className="min-w-0">
               <div className="flex items-center gap-2">
                 <h3 className="font-bold text-[#32325d] dark:text-white text-base">
                   Bulk Edit
                 </h3>
-                <span className="text-[12px] font-extrabold px-2 py-0.5 rounded bg-[#3970e1] text-white shadow-xs">
+                <span className="text-[12px] font-extrabold px-2 py-0.5 rounded bg-[#3970e1] text-white shadow-xs shrink-0">
                   {selectedUsers.length} users selected
                 </span>
               </div>
-              <p className="text-xs text-[#8898aa] dark:text-slate-400 mt-0.5">
+              <p className="text-xs text-[#8898aa] dark:text-slate-400 mt-0.5 truncate">
                 Apply synchronized updates to all selected accounts
               </p>
             </div>
@@ -176,7 +188,7 @@ export default function BulkUserEditorPanel({
               <div
                 key={u.id}
                 className="inline-flex items-center gap-1.5 px-2 py-0.5 bg-[#f8f9fe] dark:bg-slate-800 hover:bg-[#eef2ff] dark:hover:bg-slate-700 border border-[#dee2e6] dark:border-slate-700 rounded text-[12px] font-medium text-[#32325d] dark:text-slate-200 transition group shadow-2xs"
-                title={`User #${u.id}: ${displayName}${u.username && u.username !== displayName ? ` (@${u.username})` : ''} - Click to edit individually`}
+                title={`User #${u.id}: ${displayName}${u.username && u.username !== displayName ? ` ${u.username})` : ''} - Click to edit individually`}
               >
                 <button
                   type="button"
@@ -221,9 +233,8 @@ export default function BulkUserEditorPanel({
       </div>
 
       {/* Section 1: Expiration Date */}
-      <div className={`p-3.5 rounded-lg border transition-all ${
-        enableExpiry ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
-      }`}>
+      <div className={`p-3.5 rounded-lg border transition-all ${enableExpiry ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
+        }`}>
         <div className="flex items-center justify-between mb-2">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -237,9 +248,8 @@ export default function BulkUserEditorPanel({
               Update Expiration Date
             </span>
           </label>
-          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${
-            enableExpiry ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
-          }`}>
+          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${enableExpiry ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
+            }`}>
             {enableExpiry ? 'Active' : 'Unchanged'}
           </span>
         </div>
@@ -320,9 +330,8 @@ export default function BulkUserEditorPanel({
       </div>
 
       {/* Section 2: Provider Auto-Sync Expiration */}
-      <div className={`p-3.5 rounded-lg border transition-all ${
-        enableSyncExpiry ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
-      }`}>
+      <div className={`p-3.5 rounded-lg border transition-all ${enableSyncExpiry ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
+        }`}>
         <div className="flex items-center justify-between mb-1">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -336,9 +345,8 @@ export default function BulkUserEditorPanel({
               Update Provider Auto-Sync Setting
             </span>
           </label>
-          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${
-            enableSyncExpiry ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
-          }`}>
+          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${enableSyncExpiry ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
+            }`}>
             {enableSyncExpiry ? 'Active' : 'Unchanged'}
           </span>
         </div>
@@ -363,9 +371,8 @@ export default function BulkUserEditorPanel({
       </div>
 
       {/* Section 3: Max Connections */}
-      <div className={`p-3.5 rounded-lg border transition-all ${
-        enableMaxConnections ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
-      }`}>
+      <div className={`p-3.5 rounded-lg border transition-all ${enableMaxConnections ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
+        }`}>
         <div className="flex items-center justify-between mb-1">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -379,9 +386,8 @@ export default function BulkUserEditorPanel({
               Update Max Connections
             </span>
           </label>
-          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${
-            enableMaxConnections ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
-          }`}>
+          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${enableMaxConnections ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
+            }`}>
             {enableMaxConnections ? 'Active' : 'Unchanged'}
           </span>
         </div>
@@ -410,9 +416,8 @@ export default function BulkUserEditorPanel({
       </div>
 
       {/* Section 4: Internal Notes */}
-      <div className={`p-3.5 rounded-lg border transition-all ${
-        enableNote ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
-      }`}>
+      <div className={`p-3.5 rounded-lg border transition-all ${enableNote ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
+        }`}>
         <div className="flex items-center justify-between mb-1">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -426,9 +431,8 @@ export default function BulkUserEditorPanel({
               Update Internal Notes
             </span>
           </label>
-          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${
-            enableNote ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
-          }`}>
+          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${enableNote ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
+            }`}>
             {enableNote ? 'Active' : 'Unchanged'}
           </span>
         </div>
@@ -477,9 +481,8 @@ export default function BulkUserEditorPanel({
       </div>
 
       {/* Section 5: Account Status (Active / Suspended) */}
-      <div className={`p-3.5 rounded-lg border transition-all ${
-        enableStatus ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
-      }`}>
+      <div className={`p-3.5 rounded-lg border transition-all ${enableStatus ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
+        }`}>
         <div className="flex items-center justify-between mb-1">
           <label className="flex items-center gap-2 cursor-pointer select-none">
             <input
@@ -493,9 +496,8 @@ export default function BulkUserEditorPanel({
               Update Account Status
             </span>
           </label>
-          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${
-            enableStatus ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
-          }`}>
+          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${enableStatus ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
+            }`}>
             {enableStatus ? 'Active' : 'Unchanged'}
           </span>
         </div>
@@ -613,6 +615,18 @@ export default function BulkUserEditorPanel({
       {/* Action Buttons */}
       <div className="pt-3 border-t border-[#e9ecef] dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-[#f6f9fc] dark:hover:bg-slate-700 text-[#525f7f] dark:text-slate-300 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-semibold shadow-xs transition active:scale-[0.98]"
+              title="Return to user list"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={handleApply}

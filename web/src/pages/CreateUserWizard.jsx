@@ -324,8 +324,8 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
 
       <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-xl shadow-argon overflow-hidden">
         {/* Stepper Tabs Bar */}
-        <div className="px-6 py-4 border-b border-[#e9ecef] dark:border-slate-800 bg-[#f8f9fe] dark:bg-slate-800/80">
-          <div className="flex items-center justify-between">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-[#e9ecef] dark:border-slate-800 bg-[#f8f9fe] dark:bg-slate-800/80 overflow-x-auto scrollbar-none">
+          <div className="flex items-center justify-between min-w-max sm:min-w-0 gap-2 sm:gap-4">
             {steps.map((s) => {
               const isActive = currentStep === s.num;
               const isDone = currentStep > s.num;
@@ -337,7 +337,7 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
                       setCurrentStep(s.num);
                     }
                   }}
-                  className={`flex items-center gap-1.5 text-xs font-semibold py-1 px-2.5 rounded transition ${isActive
+                  className={`flex items-center gap-1.5 text-xs font-semibold py-1.5 px-3 rounded-lg shrink-0 transition ${isActive
                       ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400 border border-[#3970e1]/30 dark:border-blue-700/40 font-bold'
                       : isDone
                         ? 'text-[#2dce89] dark:text-emerald-400 hover:text-[#26af74] dark:hover:text-emerald-300 cursor-pointer'
@@ -354,7 +354,7 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
         </div>
 
         {/* Wizard Form Body */}
-        <div className="p-6">
+        <div className="p-4 sm:p-6">
           {error && (
             <div className="mb-4 p-3 bg-[#feecee] dark:bg-rose-950/60 border border-[#f5365c]/30 dark:border-rose-700/40 rounded text-xs text-[#f5365c] dark:text-rose-400 font-semibold flex items-center gap-2">
               <AlertCircle className="w-4 h-4 flex-shrink-0" />
@@ -686,7 +686,7 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
         </div>
 
         {/* Wizard Footer Navigation */}
-        <div className="px-6 py-4 border-t border-[#e9ecef] dark:border-slate-800 bg-[#f8f9fe] dark:bg-slate-800/80 flex items-center justify-between rounded-b-lg">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-[#e9ecef] dark:border-slate-800 bg-[#f8f9fe] dark:bg-slate-800/80 flex items-center justify-between rounded-b-lg">
           <button
             type="button"
             onClick={() => setCurrentStep((prev) => Math.max(1, prev - 1))}

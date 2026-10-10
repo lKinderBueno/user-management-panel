@@ -101,6 +101,8 @@ export default function ResellerDashboard({
   // Active / Selected user for editing
   const [activeUser, setActiveUser] = React.useState(null);
   const [isDrawerOpen, setIsDrawerOpen] = React.useState(false);
+  const isDrawerOpenRef = React.useRef(isDrawerOpen);
+  isDrawerOpenRef.current = isDrawerOpen;
 
   // View mode: 'grid' (100% data grid + slide-over drawer) or 'split' (side-by-side)
   const [viewMode, setViewMode] = React.useState(
@@ -178,10 +180,13 @@ export default function ResellerDashboard({
     }
   }, [location.pathname, currentPlaylist?.id, navigate]);
 
+  const modalOpenedFromEditorRef = React.useRef(false);
+
   // Dedicated Route Navigation for Managed User Modals
-  const handleOpenInfoModal = React.useCallback((u) => {
+  const handleOpenInfoModal = React.useCallback((u, fromEditor = false) => {
     const target = u || activeUser;
     if (!target || !currentPlaylist?.id) return;
+    modalOpenedFromEditorRef.current = fromEditor === true || (isDrawerOpenRef.current && target === activeUser);
     setActiveUser(target);
     setShowInfoModal(true);
     setShowCredsModal(false);
@@ -189,9 +194,10 @@ export default function ResellerDashboard({
     navigate(`/users/${currentPlaylist.id}/${target.id}/info`);
   }, [activeUser, currentPlaylist?.id, navigate]);
 
-  const handleOpenCredsModal = React.useCallback((u) => {
+  const handleOpenCredsModal = React.useCallback((u, fromEditor = false) => {
     const target = u || activeUser;
     if (!target || !currentPlaylist?.id) return;
+    modalOpenedFromEditorRef.current = fromEditor === true || (isDrawerOpenRef.current && target === activeUser);
     setActiveUser(target);
     setShowCredsModal(true);
     setShowInfoModal(false);
@@ -199,9 +205,10 @@ export default function ResellerDashboard({
     navigate(`/users/${currentPlaylist.id}/${target.id}/credentials`);
   }, [activeUser, currentPlaylist?.id, navigate]);
 
-  const handleOpenM3uModal = React.useCallback((u) => {
+  const handleOpenM3uModal = React.useCallback((u, fromEditor = false) => {
     const target = u || activeUser;
     if (!target || !currentPlaylist?.id) return;
+    modalOpenedFromEditorRef.current = fromEditor === true || (isDrawerOpenRef.current && target === activeUser);
     setActiveUser(target);
     setShowM3uModal(true);
     setShowInfoModal(false);
@@ -209,9 +216,10 @@ export default function ResellerDashboard({
     navigate(`/users/${currentPlaylist.id}/${target.id}/m3u`);
   }, [activeUser, currentPlaylist?.id, navigate]);
 
-  const handleOpenMoveModal = React.useCallback((u) => {
+  const handleOpenMoveModal = React.useCallback((u, fromEditor = false) => {
     const target = u || activeUser;
     if (!target || !currentPlaylist?.id) return;
+    modalOpenedFromEditorRef.current = fromEditor === true || (isDrawerOpenRef.current && target === activeUser);
     setActiveUser(target);
     setShowMoveModal(true);
     setShowInfoModal(false);
@@ -220,22 +228,47 @@ export default function ResellerDashboard({
     navigate(`/users/${currentPlaylist.id}/${target.id}/move`);
   }, [activeUser, currentPlaylist?.id, navigate]);
 
-  const handleCloseUserModal = React.useCallback(() => {
+  const handleCloseUserModal = React.useCallback((forceCloseToPlaylist = false) => {
     setShowInfoModal(false);
     setShowCredsModal(false);
     setShowM3uModal(false);
     setShowMoveModal(false);
+
+    if (!currentPlaylist?.id) return;
+
+    // Strict boolean check: ignore React SyntheticEvent objects passed by onClick
+    if (forceCloseToPlaylist === true) {
+      modalOpenedFromEditorRef.current = false;
+      setIsDrawerOpen(false);
+      isDrawerOpenRef.current = false;
+      navigate(`/users/${currentPlaylist.id}`);
+      return;
+    }
+
+    const targetUserId = activeUser?.id || userId;
+    const wasOpenedFromEditor = modalOpenedFromEditorRef.current;
+    modalOpenedFromEditorRef.current = false;
+
+    if (wasOpenedFromEditor && targetUserId) {
+      if (viewMode === 'grid' || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
+        setIsDrawerOpen(true);
+        isDrawerOpenRef.current = true;
+      }
+      navigate(`/users/${currentPlaylist.id}/${targetUserId}`);
+    } else {
+      setIsDrawerOpen(false);
+      isDrawerOpenRef.current = false;
+      navigate(`/users/${currentPlaylist.id}`);
+    }
+  }, [activeUser?.id, userId, currentPlaylist?.id, navigate, viewMode]);
+
+  const handleCloseDrawer = React.useCallback(() => {
+    setIsDrawerOpen(false);
+    isDrawerOpenRef.current = false;
     if (userId && currentPlaylist?.id) {
       navigate(`/users/${currentPlaylist.id}`);
     }
   }, [userId, currentPlaylist?.id, navigate]);
-
-  const handleCloseDrawer = React.useCallback(() => {
-    setIsDrawerOpen(false);
-    if (userId && !userModal && currentPlaylist?.id) {
-      navigate(`/users/${currentPlaylist.id}`);
-    }
-  }, [userId, userModal, currentPlaylist?.id, navigate]);
 
   // Synchronize route parameters (/users/:listId/:userId/:userModal or /users/:listId/:userId) with modals and active user
   React.useEffect(() => {
@@ -244,8 +277,9 @@ export default function ResellerDashboard({
       setShowCredsModal(false);
       setShowM3uModal(false);
       setShowMoveModal(false);
-      if (viewMode === 'grid') {
+      if (viewMode === 'grid' || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
         setIsDrawerOpen(false);
+        isDrawerOpenRef.current = false;
       }
       return;
     }
@@ -254,8 +288,8 @@ export default function ResellerDashboard({
 
     const matched = users.find((u) => String(u.id) === String(userId));
     if (matched) {
-      setActiveUser(matched);
-      setSelectedUserIds([matched.id]);
+      setActiveUser((prev) => (prev && String(prev.id) === String(matched.id) ? prev : matched));
+      setSelectedUserIds((prev) => (prev.length === 1 && String(prev[0]) === String(matched.id) ? prev : [matched.id]));
       const modal = (userModal || '').toLowerCase();
 
       if (modal === 'info' || modal === 'links') {
@@ -283,8 +317,9 @@ export default function ResellerDashboard({
         setShowCredsModal(false);
         setShowM3uModal(false);
         setShowMoveModal(false);
-        if (viewMode === 'grid') {
+        if (viewMode === 'grid' || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
           setIsDrawerOpen(true);
+          isDrawerOpenRef.current = true;
         }
       } else {
         // Unknown modal action, fallback to user
@@ -317,8 +352,12 @@ export default function ResellerDashboard({
     };
     if (patternMenuOpen || dataMenuOpen) {
       document.addEventListener('mousedown', handleClickOutside);
+      document.addEventListener('touchstart', handleClickOutside);
+      return () => {
+        document.removeEventListener('mousedown', handleClickOutside);
+        document.removeEventListener('touchstart', handleClickOutside);
+      };
     }
-    return () => document.removeEventListener('mousedown', handleClickOutside);
   }, [patternMenuOpen, dataMenuOpen]);
 
   const handleOpenPatternModal = (tab = 'rename') => {
@@ -420,8 +459,9 @@ export default function ResellerDashboard({
         } else if (modal === 'move') {
           setShowMoveModal(true);
         } else if (!modal || modal === 'edit') {
-          if (viewModeRef.current === 'grid') {
+          if (viewModeRef.current === 'grid' || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
             setIsDrawerOpen(true);
+            isDrawerOpenRef.current = true;
           }
         }
       } else {
@@ -709,6 +749,14 @@ export default function ResellerDashboard({
   const handleSelectUser = (user) => {
     if (user) {
       setActiveUser({ ...user });
+      setSelectedUserIds([user.id]);
+      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+        setIsDrawerOpen(true);
+        isDrawerOpenRef.current = true;
+      }
+      if (currentPlaylist?.id) {
+        navigate(`/users/${currentPlaylist.id}/${user.id}`);
+      }
     }
   };
 
@@ -717,19 +765,34 @@ export default function ResellerDashboard({
     const found = users.find((u) => String(u.id) === String(id));
     if (found) {
       setActiveUser({ ...found });
+      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
+        setIsDrawerOpen(true);
+        isDrawerOpenRef.current = true;
+      }
+      if (currentPlaylist?.id) {
+        navigate(`/users/${currentPlaylist.id}/${found.id}`);
+      }
     }
   };
 
   const handleClearSelection = () => {
     setSelectedUserIds([]);
     setActiveUser(null);
+    if (viewMode === 'grid' || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
+      setIsDrawerOpen(false);
+      isDrawerOpenRef.current = false;
+    }
+    if (currentPlaylist?.id) {
+      navigate(`/users/${currentPlaylist.id}`);
+    }
   };
 
   const handleEditUser = (user) => {
     setActiveUser({ ...user });
     setSelectedUserIds([user.id]);
-    if (viewMode === 'grid') {
+    if (viewMode === 'grid' || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
       setIsDrawerOpen(true);
+      isDrawerOpenRef.current = true;
     }
     if (currentPlaylist?.id) {
       navigate(`/users/${currentPlaylist.id}/${user.id}`);
@@ -866,7 +929,13 @@ export default function ResellerDashboard({
       const nextActive = viewMode === 'split' ? (remaining[0] || null) : null;
       setActiveUser(nextActive);
       setSelectedUserIds(nextActive && viewMode === 'split' ? [nextActive.id] : []);
-      if (viewMode === 'grid') setIsDrawerOpen(false);
+      if (viewMode === 'grid' || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
+        setIsDrawerOpen(false);
+        isDrawerOpenRef.current = false;
+      }
+      if (currentPlaylist?.id) {
+        navigate(`/users/${currentPlaylist.id}`);
+      }
       onUserCountChange?.(remaining.length);
       showNotify(`${idsToDelete.length} user(s) deleted successfully`);
     } catch (err) {
@@ -888,7 +957,13 @@ export default function ResellerDashboard({
         if (nextActive && viewMode === 'split') {
           setSelectedUserIds([nextActive.id]);
         }
-        if (viewMode === 'grid') setIsDrawerOpen(false);
+        if (viewMode === 'grid' || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
+          setIsDrawerOpen(false);
+          isDrawerOpenRef.current = false;
+        }
+        if (currentPlaylist?.id) {
+          navigate(`/users/${currentPlaylist.id}`);
+        }
       }
       onUserCountChange?.(remaining.length);
       showNotify(`User "${u.name}" deleted successfully`);
@@ -970,8 +1045,8 @@ export default function ResellerDashboard({
             <span>{refreshingUsers ? 'Refreshing...' : 'Refresh Users'}</span>
           </button>
 
-          {/* View Mode Switcher: Full Data Grid vs Split Inspector */}
-          <div className="flex items-center p-0.5 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-lg shadow-sm">
+          {/* View Mode Switcher: Full Data Grid vs Split Inspector (Desktop only, hidden on mobile) */}
+          <div className="hidden md:flex items-center p-0.5 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-lg shadow-sm">
             <button
               type="button"
               onClick={() => handleViewModeChange('grid')}
@@ -1014,9 +1089,9 @@ export default function ResellerDashboard({
           )}
         </div>
 
-        {/* Action Buttons (Selection action buttons are rendered in top toolbar only in full Grid view; in Split view they are handled directly in the right-side Inspector panel) */}
-        <div className="flex items-center gap-2">
-          {viewMode === 'grid' && selectedUserIds.length > 0 && (
+        {/* Action Buttons */}
+        <div className="flex items-center gap-2 flex-wrap">
+          {(viewMode === 'grid' || selectedUserIds.length > 1) && selectedUserIds.length > 0 && (
             <>
               {selectedUserIds.length > 1 && (
                 <button
@@ -1078,7 +1153,7 @@ export default function ResellerDashboard({
           <div className="relative" ref={patternMenuRef}>
             <button
               type="button"
-              onClick={() => setPatternMenuOpen(!patternMenuOpen)}
+              onClick={() => setPatternMenuOpen((prev) => !prev)}
               className="flex items-center gap-1.5 px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-[#f6f9fc] dark:hover:bg-slate-700 text-[#3970e1] dark:text-blue-400 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-semibold transition active:scale-[0.98] shadow-sm"
               title="Bulk provider modifications (Rename URL, Remove provider, Add provider, Custom DNS)"
             >
@@ -1365,9 +1440,9 @@ export default function ResellerDashboard({
             onSelectOnlyUser={handleSelectOnlyUser}
             onClearSelection={handleClearSelection}
             onEditUser={handleEditUser}
-            onShowInfo={handleOpenInfoModal}
-            onShowCreds={handleOpenCredsModal}
-            onShowM3u={handleOpenM3uModal}
+            onShowInfo={(u) => handleOpenInfoModal(u, false)}
+            onShowCreds={(u) => handleOpenCredsModal(u, false)}
+            onShowM3u={(u) => handleOpenM3uModal(u, false)}
             onForceSync={handleForceSync}
             onDeleteUser={handleDeleteSingleUser}
             onToggleSuspension={handleToggleSuspension}
@@ -1423,10 +1498,10 @@ export default function ResellerDashboard({
                   currentPlaylist={currentPlaylist}
                   onSave={handleSaveUser}
                   saving={saving}
-                  onShowInfo={() => handleOpenInfoModal(activeUser)}
-                  onShowCreds={() => handleOpenCredsModal(activeUser)}
-                  onShowM3u={() => handleOpenM3uModal(activeUser)}
-                  onShowMove={() => handleOpenMoveModal(activeUser)}
+                  onShowInfo={() => handleOpenInfoModal(activeUser, true)}
+                  onShowCreds={() => handleOpenCredsModal(activeUser, true)}
+                  onShowM3u={() => handleOpenM3uModal(activeUser, true)}
+                  onShowMove={() => handleOpenMoveModal(activeUser, true)}
                   onDelete={() => activeUser && handleDeleteSingleUser(activeUser)}
                   onForceSync={() => handleForceSync(activeUser)}
                   syncing={syncingUserId === activeUser.id}
@@ -1450,23 +1525,23 @@ export default function ResellerDashboard({
               onToggleSelectId={handleToggleSelectId}
               onSelectAllVisible={handleSelectAllVisible}
               activeUserId={activeUser?.id}
-              onSelectUser={(u) => {
-                if (u) setActiveUser({ ...u });
-              }}
+              onSelectUser={handleSelectUser}
               onSelectOnlyUser={handleSelectOnlyUser}
               onClearSelection={handleClearSelection}
-              onEditUser={(u) => {
-                setActiveUser({ ...u });
-                setSelectedUserIds([u.id]);
-              }}
+              onEditUser={handleEditUser}
+              onShowInfo={(u) => handleOpenInfoModal(u, false)}
+              onShowCreds={(u) => handleOpenCredsModal(u, false)}
+              onShowM3u={(u) => handleOpenM3uModal(u, false)}
+              onForceSync={handleForceSync}
+              onDeleteUser={handleDeleteSingleUser}
               compact={true}
               onToggleSuspension={handleToggleSuspension}
               syncingUserId={syncingUserId}
             />
           </div>
 
-          {/* Right Column: Wide Inline Inspector Panel */}
-          <div className="flex-1 min-w-0 w-full">
+          {/* Right Column: Wide Inline Inspector Panel (Desktop only) */}
+          <div className="hidden lg:block flex-1 min-w-0 w-full">
             {selectedUserIds.length > 1 ? (
               <BulkUserEditorPanel
                 selectedUsers={users.filter((u) => selectedUserIds.includes(u.id))}
@@ -1509,10 +1584,10 @@ export default function ResellerDashboard({
                 currentPlaylist={currentPlaylist}
                 onSave={handleSaveUser}
                 saving={saving}
-                onShowInfo={() => handleOpenInfoModal(activeUser)}
-                onShowCreds={() => handleOpenCredsModal(activeUser)}
-                onShowM3u={() => handleOpenM3uModal(activeUser)}
-                onShowMove={() => handleOpenMoveModal(activeUser)}
+                onShowInfo={() => handleOpenInfoModal(activeUser, true)}
+                onShowCreds={() => handleOpenCredsModal(activeUser, true)}
+                onShowM3u={() => handleOpenM3uModal(activeUser, true)}
+                onShowMove={() => handleOpenMoveModal(activeUser, true)}
                 onDelete={() => activeUser && handleDeleteSingleUser(activeUser)}
                 onForceSync={() => handleForceSync(activeUser)}
                 syncing={syncingUserId === activeUser?.id}
@@ -1520,6 +1595,70 @@ export default function ResellerDashboard({
               />
             )}
           </div>
+
+          {/* Mobile Slide-Over Drawer for Split View (< lg) */}
+          {isDrawerOpen && (
+            <div className="lg:hidden">
+              {selectedUserIds.length > 1 ? (
+                <BulkUserEditorPanel
+                  selectedUsers={users.filter((u) => selectedUserIds.includes(u.id))}
+                  categories={categories}
+                  playlists={playlists}
+                  onSaveBulk={handleSaveBulkUsers}
+                  saving={savingBulk}
+                  onClearSelection={() => {
+                    setSelectedUserIds([]);
+                    setIsDrawerOpen(false);
+                    setActiveUser(null);
+                  }}
+                  onDeselectUser={(id) => {
+                    setSelectedUserIds((prev) => {
+                      const next = prev.filter((x) => String(x) !== String(id));
+                      if (next.length === 1) {
+                        const single = users.find((u) => String(u.id) === String(next[0]));
+                        if (single) setActiveUser(single);
+                      } else if (next.length === 0) {
+                        setActiveUser(null);
+                        setIsDrawerOpen(false);
+                      }
+                      return next;
+                    });
+                  }}
+                  onEditSingleUser={(u) => {
+                    setSelectedUserIds([u.id]);
+                    setActiveUser({ ...u });
+                  }}
+                  onDelete={handleDeleteUsers}
+                  onShowMove={() => setShowMoveModal(true)}
+                  onOpenBulkCategories={() => navigate(`/users/${currentPlaylist.id}/bulk-categories`)}
+                  onOpenBulkPatterns={() => handleOpenPatternModal('rename')}
+                  onClose={() => setIsDrawerOpen(false)}
+                  isDrawer={true}
+                />
+              ) : (
+                activeUser && (
+                  <UserEditorPanel
+                    user={activeUser}
+                    onUserChange={setActiveUser}
+                    categories={categories}
+                    playlists={playlists}
+                    currentPlaylist={currentPlaylist}
+                    onSave={handleSaveUser}
+                    saving={saving}
+                    onShowInfo={() => handleOpenInfoModal(activeUser, true)}
+                    onShowCreds={() => handleOpenCredsModal(activeUser, true)}
+                    onShowM3u={() => handleOpenM3uModal(activeUser, true)}
+                    onShowMove={() => handleOpenMoveModal(activeUser, true)}
+                    onDelete={() => activeUser && handleDeleteSingleUser(activeUser)}
+                    onForceSync={() => handleForceSync(activeUser)}
+                    syncing={syncingUserId === activeUser?.id}
+                    onClose={handleCloseDrawer}
+                    isDrawer={true}
+                  />
+                )
+              )}
+            </div>
+          )}
         </div>
       )}
 
@@ -1538,10 +1677,10 @@ export default function ResellerDashboard({
         <UserInfoModal
           user={activeUser}
           playlist={currentPlaylist}
-          onClose={handleCloseUserModal}
+          onClose={() => handleCloseUserModal(false)}
           onCustomizeM3u={() => {
             setShowInfoModal(false);
-            handleOpenM3uModal(activeUser);
+            handleOpenM3uModal(activeUser, modalOpenedFromEditorRef.current);
           }}
           onCredentialsUpdated={(updatedUser) => {
             setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? { ...u, ...updatedUser } : u)));
@@ -1555,18 +1694,18 @@ export default function ResellerDashboard({
         <ChangeCredentialsModal
           user={activeUser}
           playlistId={currentPlaylist.id}
-          onClose={handleCloseUserModal}
+          onClose={() => handleCloseUserModal(false)}
           onSuccess={(updatedUser) => {
             setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
             setActiveUser(updatedUser);
             showNotify('Credentials updated successfully');
-            handleCloseUserModal();
+            handleCloseUserModal(false);
           }}
           onSaved={(updatedUser) => {
             setUsers((prev) => prev.map((u) => (u.id === updatedUser.id ? updatedUser : u)));
             setActiveUser(updatedUser);
             showNotify('Credentials updated successfully');
-            handleCloseUserModal();
+            handleCloseUserModal(false);
           }}
         />
       )}
@@ -1576,10 +1715,10 @@ export default function ResellerDashboard({
           user={activeUser}
           playlist={currentPlaylist}
           categories={categories}
-          onClose={handleCloseUserModal}
+          onClose={() => handleCloseUserModal(false)}
           onSave={(newSettings) => {
             setActiveUser({ ...activeUser, user_settings: newSettings });
-            handleCloseUserModal();
+            handleCloseUserModal(false);
           }}
         />
       )}
@@ -1593,14 +1732,14 @@ export default function ResellerDashboard({
             ? users.filter((u) => selectedUserIds.includes(u.id)) 
             : (activeUser ? [activeUser] : [])}
           userCount={selectedUserIds.length > 0 ? selectedUserIds.length : (activeUser ? 1 : 0)}
-          onClose={handleCloseUserModal}
+          onClose={() => handleCloseUserModal(false)}
           onConfirm={async (targetPlaylistId, patternMappings = []) => {
             const ids = selectedUserIds.length > 0 
               ? selectedUserIds 
               : (activeUser ? [activeUser.id] : []);
 
             if (!ids.length) {
-              handleCloseUserModal();
+              handleCloseUserModal(true);
               return;
             }
 
@@ -1609,8 +1748,11 @@ export default function ResellerDashboard({
               setUsers((prev) => prev.filter((u) => !ids.includes(u.id)));
               setSelectedUserIds([]);
               setActiveUser(null);
-              if (viewMode === 'grid') setIsDrawerOpen(false);
-              handleCloseUserModal();
+              if (viewMode === 'grid' || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
+                setIsDrawerOpen(false);
+                isDrawerOpenRef.current = false;
+              }
+              handleCloseUserModal(true);
               showNotify(ids.length === 1 ? 'User moved successfully' : `${ids.length} users moved successfully`);
               onRefreshPlaylists?.();
             } catch (err) {

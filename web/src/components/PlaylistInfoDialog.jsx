@@ -655,10 +655,10 @@ export default function PlaylistInfoDialog({
       isOpen={open}
       onClose={onClose}
       size="5xl"
-      className="!w-[95vw] h-[90vh] max-h-[840px] min-h-[520px] flex flex-col !p-0 !rounded-2xl"
+      className="!w-full max-w-full sm:!w-[95vw] h-[95dvh] sm:h-[90vh] sm:max-h-[840px] min-h-[480px] flex flex-col !p-0 !rounded-2xl"
     >
       {/* Pinned Top Header */}
-      <div className="shrink-0 border-b border-slate-100 bg-white dark:bg-slate-900 dark:border-slate-800 px-5 py-3.5 flex items-center justify-between">
+      <div className="shrink-0 border-b border-slate-100 bg-white dark:bg-slate-900 dark:border-slate-800 px-4 sm:px-5 py-3 sm:py-3.5 flex items-center justify-between">
         <div className="flex items-center gap-3 min-w-0">
           <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-xl bg-gradient-to-tr from-[#3970e1] to-[#5e72e4] text-white shadow-xs">
             <Info className="h-5 w-5" />
@@ -717,10 +717,10 @@ export default function PlaylistInfoDialog({
       </div>
 
       {/* Master-Detail Layout */}
-      <div className="flex-1 flex min-h-0 overflow-hidden">
-        {/* Left Navigation Sidebar */}
-        <div className="w-56 sm:w-64 shrink-0 border-r border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 p-3 flex flex-col gap-1.5 overflow-y-auto">
-          <div className="px-2 py-1 text-[12px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
+      <div className="flex-1 flex flex-col md:flex-row min-h-0 overflow-hidden">
+        {/* Navigation Tabs (Horizontal scroll on mobile, vertical on md+) */}
+        <div className="md:w-64 shrink-0 border-b md:border-b-0 md:border-r border-slate-100 dark:border-slate-800 bg-slate-50/70 dark:bg-slate-900/60 p-2 md:p-3 flex flex-row md:flex-col gap-1.5 overflow-x-auto md:overflow-y-auto scrollbar-none">
+          <div className="hidden md:block px-2 py-1 text-[12px] font-bold uppercase tracking-wider text-slate-400 dark:text-slate-500">
             Sections
           </div>
           {tabs.map((tab) => {
@@ -730,14 +730,14 @@ export default function PlaylistInfoDialog({
                 key={tab.id}
                 type="button"
                 onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center justify-between w-full rounded-xl px-3 py-2.5 text-left text-xs transition-all border outline-none ${isActive
+                className={`flex items-center justify-between shrink-0 md:w-full rounded-xl px-2.5 sm:px-3 py-1.5 md:py-2.5 text-left text-xs transition-all border outline-none whitespace-nowrap md:whitespace-normal ${isActive
                   ? 'bg-white dark:bg-slate-800 text-[#3970e1] dark:text-[#63b3ed] font-bold shadow-xs border-slate-200/80 dark:border-slate-700'
                   : 'border-transparent text-slate-600 hover:bg-slate-200/50 hover:text-slate-900 dark:text-slate-400 dark:hover:bg-slate-800/50 dark:hover:text-slate-200'
                   }`}
               >
-                <div className="flex items-center gap-2.5 min-w-0">
+                <div className="flex items-center gap-2 md:gap-2.5 min-w-0">
                   <div
-                    className={`flex h-7 w-7 shrink-0 items-center justify-center rounded-lg ${isActive
+                    className={`flex h-6 w-6 md:h-7 md:w-7 shrink-0 items-center justify-center rounded-lg ${isActive
                       ? 'bg-[#3970e1]/10 text-[#3970e1] dark:bg-blue-500/20 dark:text-[#63b3ed]'
                       : 'bg-slate-200/60 text-slate-500 dark:bg-slate-800 dark:text-slate-400'
                       }`}
@@ -746,14 +746,14 @@ export default function PlaylistInfoDialog({
                   </div>
                   <div className="min-w-0">
                     <div className="truncate text-xs font-semibold leading-tight">{tab.label}</div>
-                    <div className="truncate text-[13px] text-slate-500 dark:text-slate-400 font-normal mt-0.5">
+                    <div className="hidden md:block truncate text-[13px] text-slate-500 dark:text-slate-400 font-normal mt-0.5">
                       {tab.desc}
                     </div>
                   </div>
                 </div>
 
                 {tab.badge != null && (
-                  <span className="flex h-5 min-w-5 px-1 items-center justify-center rounded-full bg-emerald-500 text-white font-bold text-[12px] shrink-0 ml-1">
+                  <span className="flex h-4 min-w-4 md:h-5 md:min-w-5 px-1 items-center justify-center rounded-full bg-emerald-500 text-white font-bold text-[10px] md:text-[12px] shrink-0 ml-1">
                     {tab.badge}
                   </span>
                 )}
@@ -763,7 +763,7 @@ export default function PlaylistInfoDialog({
         </div>
 
         {/* Right Main Content Panel */}
-        <div className="flex-1 p-5 sm:p-6 overflow-y-auto min-h-0 bg-white dark:bg-slate-900 space-y-5">
+        <div className="flex-1 p-3.5 sm:p-5 md:p-6 overflow-y-auto min-h-0 bg-white dark:bg-slate-900 space-y-4 sm:space-y-5">
           {/* ========================================================================= */}
           {/* TAB 1: CREDENTIALS & URLS */}
           {/* ========================================================================= */}

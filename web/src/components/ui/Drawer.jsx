@@ -2,12 +2,12 @@ import React from 'react';
 import ModalPortal from '../ModalPortal';
 
 const DRAWER_SIZES = {
-  sm: 'w-full sm:w-[380px] max-w-[90vw]',
-  md: 'w-full sm:w-[540px] max-w-[90vw]',
-  lg: 'w-full sm:w-[720px] max-w-[95vw]',
-  xl: 'w-full sm:w-[840px] max-w-[95vw]',
-  panel: 'w-full sm:w-[820px] lg:w-[940px] max-w-[95vw]',
-  full: 'w-full max-w-[100vw]',
+  sm: 'w-full max-w-full sm:max-w-[90vw] sm:w-[380px]',
+  md: 'w-full max-w-full sm:max-w-[90vw] sm:w-[540px]',
+  lg: 'w-full max-w-full sm:max-w-[95vw] sm:w-[720px]',
+  xl: 'w-full max-w-full sm:max-w-[95vw] sm:w-[840px]',
+  panel: 'w-full max-w-full sm:max-w-[95vw] sm:w-[820px] lg:w-[940px]',
+  full: 'w-full max-w-full',
 };
 
 export default function Drawer({
@@ -40,11 +40,11 @@ export default function Drawer({
         <div
           role="dialog"
           aria-modal="true"
-          className={`relative ${sizeClass} bg-white dark:bg-slate-900 ${
+          className={`relative ${sizeClass} h-[100dvh] max-h-[100dvh] bg-white dark:bg-slate-900 ${
             isRight
               ? 'border-l border-[#dee2e6] dark:border-slate-800 animate-in slide-in-from-right'
               : 'border-r border-[#dee2e6] dark:border-slate-800 animate-in slide-in-from-left'
-          } shadow-2xl z-10 overflow-y-auto p-6 duration-200 cursor-default ${className}`}
+          } shadow-2xl z-10 overflow-y-auto p-4 sm:p-6 duration-200 cursor-default ${className}`}
           onClick={(e) => e.stopPropagation()}
         >
           {children}

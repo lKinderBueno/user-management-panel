@@ -572,6 +572,18 @@ func (r *StreamRepo) PruneObsoleteStreams(ctx context.Context, listID uint64, ta
 	return totalPruned, nil
 }
 
+// PruneOrphanedEpisodes deletes episodes for a playlist whose parent series no longer exists in the series table.
+func (r *StreamRepo) PruneOrphanedEpisodes(ctx context.Context, listID uint64) (int64, error) {
+	query := `DELETE se FROM series_episodes se 
+	          LEFT JOIN series s ON se.list_id = s.list_id AND se.series_id = s.id 
+	          WHERE se.list_id = ? AND s.id IS NULL`
+	res, err := r.db.ExecContext(ctx, query, listID)
+	if err != nil {
+		return 0, err
+	}
+	return res.RowsAffected()
+}
+
 // GetCategoryMap returns a map of category ID -> category Name for the given listID and table.
 func (r *StreamRepo) GetCategoryMap(ctx context.Context, listID uint64, tableName string) (map[uint64]string, error) {
 	validTables := map[string]bool{

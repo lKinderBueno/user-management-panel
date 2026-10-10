@@ -6,6 +6,7 @@ import {
   Info,
   Sliders,
   ArrowRightLeft,
+  ArrowLeft,
   Trash2,
   FileText,
   Loader2,
@@ -112,60 +113,85 @@ export default function UserEditorPanel({
 
   const content = (
     <div className="space-y-4">
-      {/* Top Bar with Name, Expiration and Action Buttons */}
-      <div className="pb-3 border-b border-[#e9ecef] dark:border-slate-800 space-y-2.5">
-        <div className="flex flex-col sm:flex-row sm:items-end justify-between gap-3">
-          <div className="flex-1 grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
-            <div>
-              <div className="flex items-center justify-between mb-1 min-h-[16px]">
-                <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider leading-4">
-                  Name
-                </label>
-                {user.username && (
-                  <span className="text-xs text-[#8898aa] dark:text-slate-400 font-mono truncate leading-4" title={`Username: ${user.username}`}>
-                    {user.username}
-                  </span>
-                )}
-              </div>
-              <input
-                type="text"
-                value={user.name || ''}
-                onChange={(e) => onUserChange({ ...user, name: e.target.value })}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs text-[#32325d] dark:text-slate-100 placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 transition shadow-sm"
-                placeholder="Name..."
-              />
-            </div>
-
-            <div>
-              <CalendarPicker
-                label="Expiration Date"
-                value={user.expiry}
-                onChange={(exp) => onUserChange({ ...user, expiry: exp })}
-              />
-            </div>
-          </div>
-
-          <div className="flex items-stretch gap-1.5 sm:self-end flex-shrink-0">
+      {/* Top Navigation & Title Bar (Always visible with clear Back button) */}
+      <div className="pb-3 border-b border-[#e9ecef] dark:border-slate-800 flex items-center justify-between gap-3">
+        <div className="flex items-center gap-2.5 min-w-0">
+          {onClose && (
             <button
               type="button"
-              onClick={onShowInfo}
-              className="flex items-center gap-1.5 px-3 py-2 bg-white dark:bg-slate-800 hover:bg-[#f6f9fc] dark:hover:bg-slate-700 text-[#525f7f] dark:text-slate-200 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-semibold shadow-xs transition active:scale-[0.98]"
-              title="Streaming links, credentials, M3U and STB portal info"
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-3 py-1.5 bg-[#f6f9fc] dark:bg-slate-800 hover:bg-[#eef2ff] dark:hover:bg-slate-700 text-[#3970e1] dark:text-blue-400 border border-[#dee2e6] dark:border-slate-700 rounded-lg text-xs font-bold transition active:scale-95 shadow-xs shrink-0"
+              title="Return to user list"
             >
-              <Info className="w-3.5 h-3.5 text-[#3970e1] dark:text-blue-400" />
-              <span>Info & Links</span>
+              <ArrowLeft className="w-4 h-4" />
+              <span>Back</span>
             </button>
+          )}
 
-            {isDrawer && onClose && (
-              <button
-                type="button"
-                onClick={onClose}
-                className="px-2 flex items-center justify-center text-[#8898aa] dark:text-slate-400 hover:text-[#32325d] dark:hover:text-white hover:bg-[#f6f9fc] dark:hover:bg-slate-800 rounded transition ml-1"
-                title="Close panel"
-              >
-                <X className="w-4 h-4" />
-              </button>
+          <div className="min-w-0">
+            <div className="flex items-center gap-2">
+              <h3 className="font-bold text-[#32325d] dark:text-white text-sm sm:text-base truncate">
+                {user.name || 'Edit User'}
+              </h3>
+              <span className="font-mono text-xs text-[#8898aa] dark:text-slate-400 shrink-0">
+                #{user.id}
+              </span>
+            </div>
+            {user.username && (
+              <span className="text-xs text-[#8898aa] dark:text-slate-400 font-mono truncate block">
+                @{user.username}
+              </span>
             )}
+          </div>
+        </div>
+
+        <div className="flex items-center gap-2 shrink-0">
+          <button
+            type="button"
+            onClick={onShowInfo}
+            className="flex items-center gap-1.5 px-2.5 sm:px-3 py-1.5 bg-white dark:bg-slate-800 hover:bg-[#f6f9fc] dark:hover:bg-slate-700 text-[#525f7f] dark:text-slate-200 border border-[#dee2e6] dark:border-slate-700 rounded-lg text-xs font-semibold shadow-xs transition active:scale-95"
+            title="Streaming links, credentials, M3U and STB portal info"
+          >
+            <Info className="w-3.5 h-3.5 text-[#3970e1] dark:text-blue-400" />
+            <span className="hidden sm:inline">Info & Links</span>
+            <span className="sm:hidden">Links</span>
+          </button>
+
+          {isDrawer && onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="p-1.5 text-[#8898aa] dark:text-slate-400 hover:text-[#32325d] dark:hover:text-white hover:bg-[#f6f9fc] dark:hover:bg-slate-800 rounded-lg transition"
+              title="Close editor (Esc)"
+            >
+              <X className="w-5 h-5" />
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Account Details: Name & Expiration */}
+      <div className="pb-3 border-b border-[#e9ecef] dark:border-slate-800 space-y-2.5">
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-3 min-w-0">
+          <div>
+            <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider leading-4 mb-1">
+              Name
+            </label>
+            <input
+              type="text"
+              value={user.name || ''}
+              onChange={(e) => onUserChange({ ...user, name: e.target.value })}
+              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs text-[#32325d] dark:text-slate-100 placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 transition shadow-sm"
+              placeholder="Name..."
+            />
+          </div>
+
+          <div>
+            <CalendarPicker
+              label="Expiration Date"
+              value={user.expiry}
+              onChange={(exp) => onUserChange({ ...user, expiry: exp })}
+            />
           </div>
         </div>
 
@@ -377,6 +403,18 @@ export default function UserEditorPanel({
       {/* Action Bar */}
       <div className="pt-4 border-t border-[#e9ecef] dark:border-slate-800 flex flex-wrap items-center justify-between gap-3">
         <div className="flex items-center gap-2">
+          {onClose && (
+            <button
+              type="button"
+              onClick={onClose}
+              className="flex items-center gap-1.5 px-3.5 py-2 bg-white dark:bg-slate-800 hover:bg-[#f6f9fc] dark:hover:bg-slate-700 text-[#525f7f] dark:text-slate-300 border border-[#dee2e6] dark:border-slate-700 rounded text-xs font-semibold shadow-xs transition active:scale-[0.98]"
+              title="Return to user list"
+            >
+              <ArrowLeft className="w-3.5 h-3.5" />
+              <span>Back</span>
+            </button>
+          )}
+
           <button
             type="button"
             onClick={onSave}
