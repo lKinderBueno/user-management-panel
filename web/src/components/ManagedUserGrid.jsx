@@ -270,7 +270,6 @@ export default function ManagedUserGrid({
         const rangeIds = currentRows.slice(start, end + 1).map((r) => r.original?.id).filter((id) => id != null);
         const isAdditive = e.ctrlKey || e.metaKey;
         onToggleSelectId(u.id, e, rangeIds, isAdditive);
-        if (onSelectUser) onSelectUser(u);
         return;
       }
     }
@@ -278,8 +277,7 @@ export default function ManagedUserGrid({
     lastClickedIdRef.current = u.id;
     setLastClickedId(u.id);
     onToggleSelectId(u.id, e);
-    if (onSelectUser) onSelectUser(u);
-  }, [getAnchorIndex, onToggleSelectId, onSelectUser]);
+  }, [getAnchorIndex, onToggleSelectId]);
 
   const handleRowClick = React.useCallback((u, e, rowIndex) => {
     if (!u) return;
@@ -302,7 +300,6 @@ export default function ManagedUserGrid({
         const rangeIds = currentRows.slice(start, end + 1).map((r) => r.original?.id).filter((id) => id != null);
         const isAdditive = e.ctrlKey || e.metaKey;
         onToggleSelectId(u.id, e, rangeIds, isAdditive);
-        if (onSelectUser) onSelectUser(u);
         return;
       }
     }
@@ -312,7 +309,6 @@ export default function ManagedUserGrid({
       lastClickedIdRef.current = u.id;
       setLastClickedId(u.id);
       onToggleSelectId(u.id, e);
-      if (onSelectUser) onSelectUser(u);
       return;
     }
 
@@ -324,8 +320,8 @@ export default function ManagedUserGrid({
       onSelectOnlyUser(u.id);
     } else {
       onToggleSelectId(u.id, e, [u.id], false);
+      if (onSelectUser) onSelectUser(u);
     }
-    if (onSelectUser) onSelectUser(u);
   }, [getAnchorIndex, onToggleSelectId, onSelectOnlyUser, onSelectUser]);
 
   // Status renderers
@@ -1192,7 +1188,9 @@ export default function ManagedUserGrid({
       <div
         onClick={(e) => {
           handleRowClick(u, e, rowIndex);
-          onEditUser?.(u);
+          if (!e.shiftKey && !e.ctrlKey && !e.metaKey) {
+            onEditUser?.(u);
+          }
         }}
         className={`rounded-xl border p-3.5 transition-all duration-150 select-none bg-white dark:bg-slate-900 shadow-sm cursor-pointer ${
           isActive

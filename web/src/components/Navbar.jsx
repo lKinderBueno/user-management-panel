@@ -11,7 +11,8 @@ import {
   X,
   SlidersHorizontal,
   ChevronDown,
-  Calendar
+  Calendar,
+  RotateCcw
 } from 'lucide-react';
 import UserProfileMenu from './layout/UserProfileMenu';
 

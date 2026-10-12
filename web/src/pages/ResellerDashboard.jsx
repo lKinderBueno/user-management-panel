@@ -741,6 +741,14 @@ export default function ResellerDashboard({
       } else if (!exists && id != null) {
         const clicked = users.find((u) => String(u.id) === String(id));
         if (clicked) setActiveUser(clicked);
+      } else if (exists && next.length > 1) {
+        setActiveUser((cur) => {
+          if (cur && String(cur.id) === String(id)) {
+            const nextActive = users.find((u) => String(u.id) === String(next[next.length - 1]));
+            return nextActive || null;
+          }
+          return cur;
+        });
       }
       return next;
     });
@@ -749,14 +757,6 @@ export default function ResellerDashboard({
   const handleSelectUser = (user) => {
     if (user) {
       setActiveUser({ ...user });
-      setSelectedUserIds([user.id]);
-      if (typeof window !== 'undefined' && window.innerWidth < 1024) {
-        setIsDrawerOpen(true);
-        isDrawerOpenRef.current = true;
-      }
-      if (currentPlaylist?.id) {
-        navigate(`/users/${currentPlaylist.id}/${user.id}`);
-      }
     }
   };
 
