@@ -27,7 +27,8 @@ import {
   GripVertical,
   Lock,
   Unlock,
-  ShieldAlert
+  ShieldAlert,
+  Calendar
 } from 'lucide-react';
 import { getServerOrigin } from '../api/client';
 import { resolveProtocolHost } from '../utils/streamingUrls';
@@ -55,7 +56,7 @@ const DEFAULT_COLUMN_SIZING = {
   user: 240,
   m3u: 140,
   provider: 220,
-  status: 155,
+  status: 175,
   connections: 90,
   categories: 180,
   note: 150,
@@ -156,6 +157,28 @@ function CopyButton({ text, label = 'Copy', className = '' }) {
       )}
     </button>
   );
+}
+
+// Parses expiry values (ISO 8601, SQL datetime, unix timestamp in sec/ms) safely
+export function parseExpiryDate(expiry) {
+  if (!expiry) return null;
+  let s = String(expiry).trim();
+  if (!s || s.toLowerCase() === 'unlimited' || s.toLowerCase() === 'null') return null;
+  if (/^\d{4}-\d{2}-\d{2} \d{2}:\d{2}:\d{2}$/.test(s)) {
+    s = s.replace(' ', 'T') + 'Z';
+  } else if (/^\d+$/.test(s)) {
+    const num = Number(s);
+    s = num < 1e11 ? num * 1000 : num;
+  }
+  const d = new Date(s);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+// Formats expiry in the user's browser locale (both date and time)
+export function formatBrowserDateTime(expiry) {
+  const d = parseExpiryDate(expiry);
+  if (!d) return 'Unlimited';
+  return d.toLocaleString();
 }
 
 export default function ManagedUserGrid({
@@ -326,70 +349,105 @@ export default function ManagedUserGrid({
 
   // Status renderers
   const renderStatus = (expiry, user) => {
+    const d = parseExpiryDate(expiry);
+    const now = new Date();
+    const near = new Date();
+    near.setDate(near.getDate() + 7);
+
+    const isExpired = d && d < now;
+    const isExpiring = d && !isExpired && d <= near;
+    const diffDays = d ? Math.round((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+    const relativeText = d
+      ? (isExpired ? `(${Math.abs(diffDays)}d ago)` : `(${diffDays}d left)`)
+      : null;
+    const formattedDt = d ? d.toLocaleString() : 'Unlimited';
+
     if (user?.is_suspended) {
       return (
-        <div className="space-y-0.5">
-          <span className="inline-flex items-center gap-1.5 text-xs text-[#f5365c] dark:text-rose-400 font-bold">
-            <span className="w-2 h-2 rounded-full bg-[#f5365c] animate-pulse" />
-            <span>{user.is_compromised ? 'Compromised' : 'Suspended'}</span>
-          </span>
-          <div className="text-[13px] text-[#f5365c]/80 dark:text-rose-400/80 font-medium truncate max-w-[130px]" title={user.compromised_reason || 'Multi-IP detection'}>
-            {user.compromised_reason ? user.compromised_reason.replace(/^Suspended by system:\s*/i, '') : 'Access suspended'}
+        <div className="space-y-0.5" title={user.compromised_reason || `Suspended - Expiry: ${formattedDt}`}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-xs text-[#f5365c] dark:text-rose-400 font-bold">
+              <span className="w-2 h-2 rounded-full bg-[#f5365c] animate-pulse" />
+              <span>{user.is_compromised ? 'Compromised' : 'Suspended'}</span>
+            </span>
+            {relativeText && (
+              <span className="font-mono text-[11px] text-[#f5365c]/80 dark:text-rose-400/80 font-medium">
+                {relativeText}
+              </span>
+            )}
+          </div>
+          <div className="font-mono text-[11px] text-[#8898aa] dark:text-slate-400 truncate max-w-[170px]" title={formattedDt}>
+            {d ? formattedDt : 'Unlimited'}
           </div>
         </div>
       );
     }
-    if (!expiry) {
+
+    if (!d) {
       return (
         <div className="space-y-0.5">
           <span className="inline-flex items-center gap-1.5 text-xs text-[#8898aa] dark:text-slate-400">
             <span className="w-2 h-2 rounded-full bg-[#adb5bd] dark:bg-slate-500" />
             <span>Unlimited</span>
           </span>
-        </div>
-      );
-    }
-    const d = new Date(expiry);
-    const now = new Date();
-    const near = new Date();
-    near.setDate(near.getDate() + 7);
-
-    const diffDays = Math.round((d.getTime() - now.getTime()) / (1000 * 60 * 60 * 24));
-
-    if (d < now) {
-      return (
-        <div className="space-y-0.5">
-          <span className="inline-flex items-center gap-1.5 text-xs text-[#f5365c] dark:text-rose-400 font-semibold">
-            <span className="w-2 h-2 rounded-full bg-[#f5365c]" />
-            <span>Expired</span>
-          </span>
-          <div className="text-[13px] text-[#f5365c]/80 dark:text-rose-400/80 font-medium">
-            {Math.abs(diffDays)}d ago
+          <div className="font-mono text-[11px] text-[#adb5bd] dark:text-slate-500">
+            Never expires
           </div>
         </div>
       );
     }
-    if (d <= near) {
+
+    if (isExpired) {
       return (
-        <div className="space-y-0.5">
-          <span className="inline-flex items-center gap-1.5 text-xs text-[#fb6340] dark:text-amber-400 font-semibold">
-            <span className="w-2 h-2 rounded-full bg-[#fb6340]" />
-            <span>Expiring</span>
-          </span>
-          <div className="text-[13px] text-[#fb6340]/80 dark:text-amber-400/80 font-medium">
-            in {diffDays}d
+        <div className="space-y-0.5" title={`Expired on: ${formattedDt}`}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-xs text-[#f5365c] dark:text-rose-400 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-[#f5365c]" />
+              <span>Expired</span>
+            </span>
+            <span className="font-mono text-[11px] text-[#f5365c]/80 dark:text-rose-400/80 font-medium">
+              {relativeText}
+            </span>
+          </div>
+          <div className="font-mono text-[11px] text-[#f5365c] dark:text-rose-400 font-medium truncate max-w-[170px]" title={formattedDt}>
+            {formattedDt}
           </div>
         </div>
       );
     }
+
+    if (isExpiring) {
+      return (
+        <div className="space-y-0.5" title={`Expires on: ${formattedDt}`}>
+          <div className="flex items-center gap-1.5 flex-wrap">
+            <span className="inline-flex items-center gap-1.5 text-xs text-[#fb6340] dark:text-amber-400 font-semibold">
+              <span className="w-2 h-2 rounded-full bg-[#fb6340]" />
+              <span>Expiring</span>
+            </span>
+            <span className="font-mono text-[11px] text-[#fb6340]/80 dark:text-amber-400/80 font-medium">
+              {relativeText}
+            </span>
+          </div>
+          <div className="font-mono text-[11px] text-[#fb6340] dark:text-amber-400 font-medium truncate max-w-[170px]" title={formattedDt}>
+            {formattedDt}
+          </div>
+        </div>
+      );
+    }
+
     return (
-      <div className="space-y-0.5">
-        <span className="inline-flex items-center gap-1.5 text-xs text-[#2dce89] dark:text-emerald-400 font-semibold">
-          <span className="w-2 h-2 rounded-full bg-[#2dce89]" />
-          <span>Active</span>
-        </span>
-        <div className="text-[13px] text-[#8898aa] dark:text-slate-400 font-medium">
-          in {diffDays}d
+      <div className="space-y-0.5" title={`Expires on: ${formattedDt}`}>
+        <div className="flex items-center gap-1.5 flex-wrap">
+          <span className="inline-flex items-center gap-1.5 text-xs text-[#2dce89] dark:text-emerald-400 font-semibold">
+            <span className="w-2 h-2 rounded-full bg-[#2dce89]" />
+            <span>Active</span>
+          </span>
+          <span className="font-mono text-[11px] text-[#8898aa] dark:text-slate-400 font-medium">
+            {relativeText}
+          </span>
+        </div>
+        <div className="font-mono text-[11px] text-[#525f7f] dark:text-slate-300 font-medium truncate max-w-[170px]" title={formattedDt}>
+          {formattedDt}
         </div>
       </div>
     );
@@ -404,22 +462,23 @@ export default function ManagedUserGrid({
         </span>
       );
     }
-    if (!expiry) {
+    const d = parseExpiryDate(expiry);
+    if (!d) {
       return (
-        <span className="inline-flex items-center gap-1 text-[13px] text-[#8898aa] dark:text-slate-400">
+        <span className="inline-flex items-center gap-1 text-[13px] text-[#8898aa] dark:text-slate-400" title="Unlimited">
           <span className="w-1.5 h-1.5 rounded-full bg-[#adb5bd] dark:bg-slate-500" />
           <span>Unl.</span>
         </span>
       );
     }
-    const d = new Date(expiry);
+    const formattedDt = d.toLocaleString();
     const now = new Date();
     const near = new Date();
     near.setDate(near.getDate() + 7);
 
     if (d < now) {
       return (
-        <span className="inline-flex items-center gap-1 text-[13px] text-[#f5365c] dark:text-rose-400 font-semibold">
+        <span className="inline-flex items-center gap-1 text-[13px] text-[#f5365c] dark:text-rose-400 font-semibold" title={`Expired on: ${formattedDt}`}>
           <span className="w-1.5 h-1.5 rounded-full bg-[#f5365c]" />
           <span>Expired</span>
         </span>
@@ -427,14 +486,14 @@ export default function ManagedUserGrid({
     }
     if (d <= near) {
       return (
-        <span className="inline-flex items-center gap-1 text-[13px] text-[#fb6340] dark:text-amber-400 font-semibold">
+        <span className="inline-flex items-center gap-1 text-[13px] text-[#fb6340] dark:text-amber-400 font-semibold" title={`Expires on: ${formattedDt}`}>
           <span className="w-1.5 h-1.5 rounded-full bg-[#fb6340]" />
           <span>Expiring</span>
         </span>
       );
     }
     return (
-      <span className="inline-flex items-center gap-1 text-[13px] text-[#2dce89] dark:text-emerald-400 font-semibold">
+      <span className="inline-flex items-center gap-1 text-[13px] text-[#2dce89] dark:text-emerald-400 font-semibold" title={`Expires on: ${formattedDt}`}>
         <span className="w-1.5 h-1.5 rounded-full bg-[#2dce89]" />
         <span>Active</span>
       </span>
@@ -755,16 +814,16 @@ export default function ManagedUserGrid({
       id: 'status',
       accessorFn: (row) => row.expiry,
       header: 'Status / Expiry',
-      size: 155,
-      minSize: 110,
+      size: 175,
+      minSize: 130,
       enableSorting: true,
       sortingFn: (rowA, rowB) => {
-        const aVal = rowA.original.expiry;
-        const bVal = rowB.original.expiry;
-        if (!aVal && !bVal) return 0;
-        if (!aVal) return 1;
-        if (!bVal) return -1;
-        return new Date(aVal).getTime() - new Date(bVal).getTime();
+        const aDate = parseExpiryDate(rowA.original.expiry);
+        const bDate = parseExpiryDate(rowB.original.expiry);
+        if (!aDate && !bDate) return 0;
+        if (!aDate) return 1;
+        if (!bDate) return -1;
+        return aDate.getTime() - bDate.getTime();
       },
       cell: ({ row }) => renderStatus(row.original.expiry, row.original)
     },
@@ -1161,14 +1220,14 @@ export default function ManagedUserGrid({
   const compactVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => compactContainerRef.current,
-    estimateSize: () => 48,
+    estimateSize: () => 52,
     overscan: 10
   });
 
   const mobileVirtualizer = useVirtualizer({
     count: rows.length,
     getScrollElement: () => mobileContainerRef.current,
-    estimateSize: () => 170,
+    estimateSize: () => 190,
     overscan: 6
   });
 
@@ -1183,6 +1242,20 @@ export default function ManagedUserGrid({
     const providerSummary = patterns.length > 0
       ? (patterns[0].cUrl || patterns[0].url ? resolveProtocolHost(patterns[0].cUrl || patterns[0].url) : patterns[0].type || 'Provider')
       : null;
+
+    // Expiry calculation for mobile card
+    const expiryDate = parseExpiryDate(u.expiry);
+    const now = new Date();
+    const near = new Date();
+    near.setDate(near.getDate() + 7);
+
+    const isExpired = expiryDate && expiryDate < now;
+    const isExpiring = expiryDate && !isExpired && expiryDate <= near;
+    const diffDays = expiryDate ? Math.round((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+    const relativeText = expiryDate
+      ? (isExpired ? `(${Math.abs(diffDays)}d ago)` : `(${diffDays}d left)`)
+      : null;
+    const formattedExpiry = expiryDate ? expiryDate.toLocaleString() : 'Unlimited';
 
     return (
       <div
@@ -1240,7 +1313,7 @@ export default function ManagedUserGrid({
           </div>
         </div>
 
-        {/* Middle Row: Username + Copy + Expiry/Status */}
+        {/* Middle Row: Username + Copy + Status */}
         <div className="flex items-center justify-between gap-2 py-1.5 border-t border-[#f4f5f7] dark:border-slate-800/80 text-xs">
           <div className="flex items-center gap-1.5 min-w-0 font-mono text-[#525f7f] dark:text-slate-300">
             <span className="text-[#8898aa] dark:text-slate-500 font-normal">user:</span>
@@ -1251,6 +1324,40 @@ export default function ManagedUserGrid({
           <div className="shrink-0">
             {renderStatusCompact(u.expiry, u)}
           </div>
+        </div>
+
+        {/* Expiry Row: Browser-formatted date & time */}
+        <div className="flex items-center justify-between gap-2 py-1.5 border-t border-[#f4f5f7] dark:border-slate-800/80 text-xs">
+          <div className="flex items-center gap-1.5 min-w-0 text-[#525f7f] dark:text-slate-300">
+            <Calendar className="w-3.5 h-3.5 text-[#8898aa] dark:text-slate-400 shrink-0" />
+            <span className="text-[#8898aa] dark:text-slate-500 font-normal shrink-0">Expires:</span>
+            <span 
+              className={`font-mono text-[12px] truncate ${
+                !expiryDate
+                  ? 'text-[#8898aa] dark:text-slate-400 font-normal'
+                  : isExpired
+                  ? 'text-[#f5365c] dark:text-rose-400 font-semibold'
+                  : isExpiring
+                  ? 'text-[#fb6340] dark:text-amber-400 font-semibold'
+                  : 'text-[#32325d] dark:text-slate-200 font-medium'
+              }`}
+              title={formattedExpiry}
+            >
+              {formattedExpiry}
+            </span>
+          </div>
+
+          {relativeText && (
+            <span className={`font-mono text-[11px] shrink-0 font-medium ${
+              isExpired
+                ? 'text-[#f5365c] dark:text-rose-400'
+                : isExpiring
+                ? 'text-[#fb6340] dark:text-amber-400'
+                : 'text-[#8898aa] dark:text-slate-400'
+            }`}>
+              {relativeText}
+            </span>
+          )}
         </div>
 
         {/* Metadata Row: Provider summary & Creator */}
@@ -1452,6 +1559,10 @@ export default function ManagedUserGrid({
   }
 
   if (compact) {
+    const now = new Date();
+    const near = new Date();
+    near.setDate(near.getDate() + 7);
+
     const compactItems = compactVirtualizer.getVirtualItems();
     const compactPadTop = compactItems.length > 0 ? compactItems[0]?.start || 0 : 0;
     const compactPadBottom = compactItems.length > 0 
@@ -1495,11 +1606,11 @@ export default function ManagedUserGrid({
                 </th>
                 <th 
                   onClick={() => handleSortToggle('status')}
-                  className="p-2.5 w-24 text-right pr-3 cursor-pointer group select-none hover:bg-[#eef2ff] dark:hover:bg-slate-700"
+                  className="p-2.5 text-right pr-3 cursor-pointer group select-none hover:bg-[#eef2ff] dark:hover:bg-slate-700"
                   title="Status / Expiry (Click to sort)"
                 >
                   <div className="flex items-center justify-end gap-1">
-                    <span>Status</span>
+                    <span>Status / Expiry</span>
                     {renderSortIndicator('status')}
                   </div>
                 </th>
@@ -1535,9 +1646,20 @@ export default function ManagedUserGrid({
                     const isSelected = selectedSet.has(String(u.id));
                     const isActive = activeUserId != null && String(activeUserId) === String(u.id);
 
+                    const expiryDate = parseExpiryDate(u.expiry);
+                    const isExpired = expiryDate && expiryDate < now;
+                    const isExpiring = expiryDate && !isExpired && expiryDate <= near;
+                    const diffDays = expiryDate ? Math.round((expiryDate.getTime() - now.getTime()) / (1000 * 60 * 60 * 24)) : null;
+                    const relativeText = expiryDate
+                      ? (isExpired ? `(${Math.abs(diffDays)}d ago)` : `(${diffDays}d left)`)
+                      : null;
+                    const formattedExpiry = expiryDate ? expiryDate.toLocaleString() : 'Unlimited';
+
                     return (
                       <tr
                         key={u.id}
+                        ref={compactVirtualizer.measureElement}
+                        data-index={virtualRow.index}
                         onMouseDown={handleRowMouseDown}
                         onClick={(e) => handleRowClick(u, e, virtualRow.index)}
                         onDoubleClick={() => handleRowDoubleClick(u)}
@@ -1602,7 +1724,36 @@ export default function ManagedUserGrid({
                           </div>
                         </td>
                         <td className="p-2.5 text-right pr-3 whitespace-nowrap">
-                          {renderStatusCompact(u.expiry, u)}
+                          <div className="flex flex-col items-end">
+                            <div className="flex items-center justify-end gap-1.5">
+                              {renderStatusCompact(u.expiry, u)}
+                              {relativeText && (
+                                <span className={`font-mono text-[11px] font-medium ${
+                                  isExpired
+                                    ? 'text-[#f5365c]/80 dark:text-rose-400/80'
+                                    : isExpiring
+                                    ? 'text-[#fb6340]/80 dark:text-amber-400/80'
+                                    : 'text-[#8898aa] dark:text-slate-400'
+                                }`}>
+                                  {relativeText}
+                                </span>
+                              )}
+                            </div>
+                            <div
+                              className={`font-mono text-[11px] leading-tight ${
+                                !expiryDate
+                                  ? 'text-[#8898aa] dark:text-slate-500'
+                                  : isExpired
+                                  ? 'text-[#f5365c] dark:text-rose-400'
+                                  : isExpiring
+                                  ? 'text-[#fb6340] dark:text-amber-400'
+                                  : 'text-[#525f7f] dark:text-slate-400'
+                              }`}
+                              title={`Expires: ${formattedExpiry}`}
+                            >
+                              {formattedExpiry}
+                            </div>
+                          </div>
                         </td>
                         <td className="p-2.5 text-center">
                           {renderConnections(u)}
