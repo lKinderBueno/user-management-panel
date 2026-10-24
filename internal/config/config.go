@@ -39,6 +39,8 @@ type Config struct {
 	EpgDays      int
 	BatchSize    int
 	HTTPTimeout  time.Duration
+	SyncTimeout  time.Duration
+	PruneSafetyThreshold int
 
 	// Orphan reconciliation settings
 	DisableOrphanReconciliation bool
@@ -103,6 +105,16 @@ func Load() (*Config, error) {
 		timeoutSec = 60
 	}
 
+	syncTimeoutMin, _ := strconv.Atoi(getEnv("SYNC_TIMEOUT_MINUTES", "45"))
+	if syncTimeoutMin <= 0 {
+		syncTimeoutMin = 45
+	}
+
+	pruneThreshold, _ := strconv.Atoi(getEnv("PRUNE_SAFETY_THRESHOLD_PERCENT", "80"))
+	if pruneThreshold <= 0 || pruneThreshold > 100 {
+		pruneThreshold = 80
+	}
+
 	const DefaultTMDBApiKey = "a2764023c82b647eac48485b4deac0bf"
 	tmdbApiKey := getEnv("TMDB_API_KEY", DefaultTMDBApiKey)
 
@@ -145,6 +157,8 @@ func Load() (*Config, error) {
 		EpgDays:                     epgDays,
 		BatchSize:                   batchSize,
 		HTTPTimeout:                 time.Duration(timeoutSec) * time.Second,
+		SyncTimeout:                 time.Duration(syncTimeoutMin) * time.Minute,
+		PruneSafetyThreshold:       pruneThreshold,
 		DisableOrphanReconciliation: os.Getenv("DISABLE_ORPHAN_RECONCILIATION") == "true" || os.Getenv("DISABLE_ORPHAN_RECONCILIATION") == "1",
 		LogLevel:                    getEnv("LOG_LEVEL", "info"),
 	}
