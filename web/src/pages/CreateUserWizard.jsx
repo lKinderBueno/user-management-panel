@@ -322,9 +322,9 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
         }
       />
 
-      <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-xl shadow-argon overflow-hidden">
+      <div className="bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-xl shadow-argon">
         {/* Stepper Tabs Bar */}
-        <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-[#e9ecef] dark:border-slate-800 bg-[#f8f9fe] dark:bg-slate-800/80 overflow-x-auto scrollbar-none">
+        <div className="px-3 sm:px-6 py-3 sm:py-4 border-b border-[#e9ecef] dark:border-slate-800 bg-[#f8f9fe] dark:bg-slate-800/80 rounded-t-xl overflow-x-auto scrollbar-none">
           <div className="flex items-center justify-between min-w-max sm:min-w-0 gap-2 sm:gap-4">
             {steps.map((s) => {
               const isActive = currentStep === s.num;
@@ -364,7 +364,7 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
 
           {/* STEP 1: USER INFO */}
           {currentStep === 1 && (
-            <div className="space-y-4 animate-in fade-in duration-150">
+            <div className="space-y-4 min-h-[280px] sm:min-h-[320px] animate-in fade-in duration-150">
               <h3 className="text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider">
                 Account Details
               </h3>
@@ -479,7 +479,7 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
 
           {/* STEP 2: CATEGORIES */}
           {currentStep === 2 && (
-            <div className="space-y-4 animate-in fade-in duration-150">
+            <div className="space-y-4 min-h-[280px] sm:min-h-[320px] animate-in fade-in duration-150">
               <h3 className="text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider">
                 Category Access
               </h3>
@@ -528,6 +528,7 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
                   categories={categories.series || []}
                   value={seriesCategories}
                   onChange={setSeriesCategories}
+                  align="right"
                 />
               </div>
             </div>
@@ -535,7 +536,7 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
 
           {/* STEP 3: PROVIDER INFO */}
           {currentStep === 3 && (
-            <div className="space-y-4 animate-in fade-in duration-150">
+            <div className="space-y-4 min-h-[280px] sm:min-h-[320px] animate-in fade-in duration-150">
               <div className="flex items-center justify-between">
                 <h3 className="text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider">
                   Source Provider
@@ -686,7 +687,7 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
         </div>
 
         {/* Wizard Footer Navigation */}
-        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-[#e9ecef] dark:border-slate-800 bg-[#f8f9fe] dark:bg-slate-800/80 flex items-center justify-between rounded-b-lg">
+        <div className="px-4 sm:px-6 py-3 sm:py-4 border-t border-[#e9ecef] dark:border-slate-800 bg-[#f8f9fe] dark:bg-slate-800/80 flex items-center justify-between rounded-b-xl">
           <button
             type="button"
             onClick={() => setCurrentStep((prev) => Math.max(1, prev - 1))}

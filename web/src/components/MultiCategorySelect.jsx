@@ -12,22 +12,59 @@ export default function MultiCategorySelect({
 }) {
   const [isOpen, setIsOpen] = React.useState(false);
   const [openUpwards, setOpenUpwards] = React.useState(false);
+  const [effectiveAlign, setEffectiveAlign] = React.useState(align);
+  const [maxListHeight, setMaxListHeight] = React.useState(240);
   const [search, setSearch] = React.useState('');
   const containerRef = React.useRef(null);
 
-  // Smart detection of vertical space when opening
+  // Smart detection of vertical and horizontal space when opening/resizing
   React.useEffect(() => {
-    if (isOpen && containerRef.current) {
+    if (!isOpen || !containerRef.current) return;
+
+    const updatePosition = () => {
+      if (!containerRef.current) return;
       const rect = containerRef.current.getBoundingClientRect();
       const spaceBelow = window.innerHeight - rect.bottom;
-      // If less than 380px available below and more space above, open upwards
-      if (spaceBelow < 380 && rect.top > spaceBelow) {
-        setOpenUpwards(true);
+      const spaceAbove = rect.top;
+
+      let upwards = false;
+      if (spaceBelow >= 360) {
+        upwards = false;
+      } else if (spaceAbove >= 360) {
+        upwards = true;
       } else {
-        setOpenUpwards(false);
+        upwards = spaceAbove > spaceBelow;
       }
-    }
-  }, [isOpen]);
+      setOpenUpwards(upwards);
+
+      const availableVertical = upwards ? spaceAbove : spaceBelow;
+      const calculatedMaxListHeight = Math.max(120, Math.min(240, availableVertical - 140));
+      setMaxListHeight(calculatedMaxListHeight);
+
+      const dropdownWidth = 384;
+      if (align === 'right') {
+        if (rect.right - dropdownWidth < 10 && rect.left + dropdownWidth <= window.innerWidth - 10) {
+          setEffectiveAlign('left');
+        } else {
+          setEffectiveAlign('right');
+        }
+      } else {
+        if (rect.left + dropdownWidth > window.innerWidth - 10 && rect.right >= dropdownWidth) {
+          setEffectiveAlign('right');
+        } else {
+          setEffectiveAlign('left');
+        }
+      }
+    };
+
+    updatePosition();
+    window.addEventListener('resize', updatePosition);
+    window.addEventListener('scroll', updatePosition, true);
+    return () => {
+      window.removeEventListener('resize', updatePosition);
+      window.removeEventListener('scroll', updatePosition, true);
+    };
+  }, [isOpen, align]);
 
   // Close dropdown on click outside
   React.useEffect(() => {
@@ -121,7 +158,7 @@ export default function MultiCategorySelect({
   const selectedCount = isAllSelected ? categories.length : selectedSet.size;
 
   return (
-    <div className="relative" ref={containerRef}>
+    <div className={`relative ${isOpen ? 'z-30' : ''}`} ref={containerRef}>
       <label className="block text-xs font-bold text-[#525f7f] uppercase tracking-wider mb-1">{title}</label>
 
       <button
@@ -151,7 +188,7 @@ export default function MultiCategorySelect({
 
       {isOpen && (
         <div 
-          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} ${
+          className={`absolute ${effectiveAlign === 'right' ? 'right-0' : 'left-0'} ${
             openUpwards ? 'bottom-full mb-2' : 'top-full mt-1.5'
           } w-80 sm:w-96 max-w-[calc(100vw-2rem)] bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-800 rounded-lg shadow-argon-dropdown dark:shadow-2xl p-3.5 z-[100] animate-in fade-in zoom-in-95 duration-100`}
         >
@@ -240,7 +277,7 @@ export default function MultiCategorySelect({
           )}
 
           {/* Categories List */}
-          <div className="max-h-60 overflow-y-auto space-y-0.5 pr-1 divide-y divide-[#f6f9fc] dark:divide-slate-800/60">
+          <div style={{ maxHeight: `${maxListHeight}px` }} className="overflow-y-auto space-y-0.5 pr-1 divide-y divide-[#f6f9fc] dark:divide-slate-800/60">
             {filteredCategories.length === 0 ? (
               <div className="py-6 text-center text-xs text-[#8898aa] dark:text-slate-400">
                 No categories found matching "{search}"
