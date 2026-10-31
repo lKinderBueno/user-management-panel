@@ -16,7 +16,7 @@ import (
 )
 
 var (
-	legacyStreamPathRegex = regexp.MustCompile(`^/[a-zA-Z0-9_\.\-]+/[a-zA-Z0-9_\.\-]+/[0-9]+(\.[a-zA-Z0-9]+)?$`)
+	legacyStreamPathRegex = regexp.MustCompile(`(?i)^/[a-zA-Z0-9_\.\-]+/[a-zA-Z0-9_\.\-]+/[0-9]+(\.[a-zA-Z0-9]+)?([&;].*)?$`)
 	redirectorStreamRegex = regexp.MustCompile(`(?i)^/(?:live|movie|series|vods|play)/[^/]+/[^/]+/[^/]+/?$`)
 	timeshiftStreamRegex  = regexp.MustCompile(`(?i)^/timeshift/[^/]+/[^/]+/[^/]+/[^/]+/[^/]+/?$`)
 )
