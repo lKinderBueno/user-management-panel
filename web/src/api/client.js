@@ -143,7 +143,7 @@ export const userApi = {
   }),
   deleteUsers: (listId, ids) => apiFetch(`/playlists/${listId}/users`, {
     method: 'DELETE',
-    body: JSON.stringify({ ids }),
+    body: JSON.stringify({ ids: (ids || []).map((id) => Number(id)).filter((id) => !isNaN(id)) }),
   }),
   moveUsers: (listId, newListId, ids, patternMappings = []) => apiFetch(`/playlists/${listId}/users/move`, {
     method: 'POST',

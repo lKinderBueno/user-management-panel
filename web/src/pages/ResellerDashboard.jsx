@@ -338,6 +338,13 @@ export default function ResellerDashboard({
   const [showDeletePlaylistModal, setShowDeletePlaylistModal] = React.useState(false);
   const [deletingPlaylist, setDeletingPlaylist] = React.useState(false);
   const [deletePlaylistError, setDeletePlaylistError] = React.useState('');
+  const [deleteUserModal, setDeleteUserModal] = React.useState({
+    isOpen: false,
+    ids: [],
+    targetUser: null,
+    loading: false,
+    error: '',
+  });
   const patternMenuRef = React.useRef(null);
   const dataMenuRef = React.useRef(null);
 
@@ -892,7 +899,7 @@ export default function ResellerDashboard({
   const handleToggleSuspension = async (u) => {
     const isSuspending = !u.is_suspended;
     const actionText = isSuspending ? 'suspend' : 'reactivate';
-    if (!confirm(`Are you sure you want to ${actionText} account "${u.name}" (${u.username})?`)) return;
+
 
     try {
       const updatedData = {
@@ -913,45 +920,66 @@ export default function ResellerDashboard({
     }
   };
 
-  // Delete user(s)
-  const handleDeleteUsers = async () => {
-    const idsToDelete = selectedUserIds.length > 0 
-      ? selectedUserIds 
-      : (activeUser ? [activeUser.id] : []);
+  // Open confirmation modal for deleting user(s) (bulk or single from selection)
+  const handleDeleteUsers = React.useCallback((customIds) => {
+    let rawIds = Array.isArray(customIds) && customIds.length > 0 
+      ? customIds 
+      : (selectedUserIds.length > 0 
+          ? selectedUserIds 
+          : (activeUser ? [activeUser.id] : []));
 
+    const idsToDelete = rawIds.map(Number).filter((id) => !isNaN(id) && id > 0);
     if (idsToDelete.length === 0) return;
-    if (!confirm(`Are you sure you want to delete ${idsToDelete.length} user(s)?`)) return;
 
-    try {
-      await userApi.deleteUsers(currentPlaylist.id, idsToDelete);
-      const remaining = users.filter((u) => !idsToDelete.includes(u.id));
-      setUsers(remaining);
-      const nextActive = viewMode === 'split' ? (remaining[0] || null) : null;
-      setActiveUser(nextActive);
-      setSelectedUserIds(nextActive && viewMode === 'split' ? [nextActive.id] : []);
-      if (viewMode === 'grid' || (typeof window !== 'undefined' && window.innerWidth < 1024)) {
-        setIsDrawerOpen(false);
-        isDrawerOpenRef.current = false;
-      }
-      if (currentPlaylist?.id) {
-        navigate(`/users/${currentPlaylist.id}`);
-      }
-      onUserCountChange?.(remaining.length);
-      showNotify(`${idsToDelete.length} user(s) deleted successfully`);
-    } catch (err) {
-      showNotify(err.message || 'Error deleting users', 'error');
+    if (idsToDelete.length === 1) {
+      const single = users.find((x) => Number(x.id) === idsToDelete[0]) || activeUser;
+      setDeleteUserModal({
+        isOpen: true,
+        ids: idsToDelete,
+        targetUser: single,
+        loading: false,
+        error: '',
+      });
+      return;
     }
-  };
 
-  // Delete single user from row action
-  const handleDeleteSingleUser = async (u) => {
-    if (!confirm(`Are you sure you want to permanently delete "${u.name}" (${u.username})?`)) return;
+    setDeleteUserModal({
+      isOpen: true,
+      ids: idsToDelete,
+      targetUser: null,
+      loading: false,
+      error: '',
+    });
+  }, [selectedUserIds, activeUser, users]);
+
+  // Open confirmation modal for deleting single user
+  const handleDeleteSingleUser = React.useCallback((u) => {
+    const target = u || activeUser;
+    if (!target) return;
+    setDeleteUserModal({
+      isOpen: true,
+      ids: [Number(target.id)],
+      targetUser: target,
+      loading: false,
+      error: '',
+    });
+  }, [activeUser]);
+
+  // Execute confirmed deletion of user(s)
+  const handleConfirmDeleteUsers = async () => {
+    const { ids } = deleteUserModal;
+    if (!ids || ids.length === 0 || !currentPlaylist?.id) return;
+
+    setDeleteUserModal((prev) => ({ ...prev, loading: true, error: '' }));
+
     try {
-      await userApi.deleteUsers(currentPlaylist.id, [u.id]);
-      const remaining = users.filter((x) => x.id !== u.id);
+      await userApi.deleteUsers(currentPlaylist.id, ids);
+      const idSet = new Set(ids.map(Number));
+      const remaining = users.filter((u) => !idSet.has(Number(u.id)));
       setUsers(remaining);
-      setSelectedUserIds((prev) => prev.filter((id) => id !== u.id));
-      if (activeUser?.id === u.id) {
+      setSelectedUserIds((prev) => prev.filter((id) => !idSet.has(Number(id))));
+
+      if (activeUser && idSet.has(Number(activeUser.id))) {
         const nextActive = viewMode === 'split' ? (remaining[0] || null) : null;
         setActiveUser(nextActive);
         if (nextActive && viewMode === 'split') {
@@ -965,10 +993,16 @@ export default function ResellerDashboard({
           navigate(`/users/${currentPlaylist.id}`);
         }
       }
+
       onUserCountChange?.(remaining.length);
-      showNotify(`User "${u.name}" deleted successfully`);
+      setDeleteUserModal({ isOpen: false, ids: [], targetUser: null, loading: false, error: '' });
+      showNotify(ids.length === 1 ? 'User deleted successfully' : `${ids.length} user(s) deleted successfully`);
     } catch (err) {
-      showNotify(err.message || 'Error deleting user', 'error');
+      setDeleteUserModal((prev) => ({
+        ...prev,
+        loading: false,
+        error: err.message || 'Error deleting user(s)',
+      }));
     }
   };
 
@@ -1502,7 +1536,7 @@ export default function ResellerDashboard({
                   onShowCreds={() => handleOpenCredsModal(activeUser, true)}
                   onShowM3u={() => handleOpenM3uModal(activeUser, true)}
                   onShowMove={() => handleOpenMoveModal(activeUser, true)}
-                  onDelete={() => activeUser && handleDeleteSingleUser(activeUser)}
+                  onDelete={(u) => handleDeleteSingleUser(u || activeUser)}
                   onForceSync={() => handleForceSync(activeUser)}
                   syncing={syncingUserId === activeUser.id}
                   onClose={handleCloseDrawer}
@@ -1588,7 +1622,7 @@ export default function ResellerDashboard({
                 onShowCreds={() => handleOpenCredsModal(activeUser, true)}
                 onShowM3u={() => handleOpenM3uModal(activeUser, true)}
                 onShowMove={() => handleOpenMoveModal(activeUser, true)}
-                onDelete={() => activeUser && handleDeleteSingleUser(activeUser)}
+                onDelete={(u) => handleDeleteSingleUser(u || activeUser)}
                 onForceSync={() => handleForceSync(activeUser)}
                 syncing={syncingUserId === activeUser?.id}
                 isDrawer={false}
@@ -1649,7 +1683,7 @@ export default function ResellerDashboard({
                     onShowCreds={() => handleOpenCredsModal(activeUser, true)}
                     onShowM3u={() => handleOpenM3uModal(activeUser, true)}
                     onShowMove={() => handleOpenMoveModal(activeUser, true)}
-                    onDelete={() => activeUser && handleDeleteSingleUser(activeUser)}
+                    onDelete={(u) => handleDeleteSingleUser(u || activeUser)}
                     onForceSync={() => handleForceSync(activeUser)}
                     syncing={syncingUserId === activeUser?.id}
                     onClose={handleCloseDrawer}
@@ -1864,6 +1898,49 @@ export default function ResellerDashboard({
         }
         error={deletePlaylistError}
         confirmLabel="Yes, Delete Playlist"
+        variant="danger"
+      />
+
+      {/* Delete User(s) Confirmation Modal */}
+      <ConfirmDialog
+        isOpen={deleteUserModal.isOpen}
+        onClose={() => {
+          if (!deleteUserModal.loading) {
+            setDeleteUserModal({ isOpen: false, ids: [], targetUser: null, loading: false, error: '' });
+          }
+        }}
+        onConfirm={handleConfirmDeleteUsers}
+        loading={deleteUserModal.loading}
+        title={deleteUserModal.ids.length === 1 ? 'Delete Managed User' : `Delete ${deleteUserModal.ids.length} Users`}
+        description={
+          deleteUserModal.ids.length === 1 ? (
+            deleteUserModal.targetUser ? (
+              <>
+                Are you sure you want to permanently delete managed user{' '}
+                <strong className="text-[#32325d] dark:text-white">"{deleteUserModal.targetUser.name}"</strong>
+                {deleteUserModal.targetUser.username ? (
+                  <span className="font-mono text-xs opacity-80"> (@{deleteUserModal.targetUser.username})</span>
+                ) : null}?
+                <br /><br />
+                Their credentials, customized categories, and streaming access will be permanently revoked.
+              </>
+            ) : (
+              <>
+                Are you sure you want to permanently delete this managed user?
+                <br /><br />
+                Their credentials, customized categories, and streaming access will be permanently revoked.
+              </>
+            )
+          ) : (
+            <>
+              Are you sure you want to permanently delete <strong className="text-[#32325d] dark:text-white">{deleteUserModal.ids.length}</strong> selected managed user(s)?
+              <br /><br />
+              All their credentials, customized categories, and streaming access will be permanently revoked.
+            </>
+          )
+        }
+        error={deleteUserModal.error}
+        confirmLabel={deleteUserModal.ids.length === 1 ? 'Delete User' : `Delete ${deleteUserModal.ids.length} Users`}
         variant="danger"
       />
     </>

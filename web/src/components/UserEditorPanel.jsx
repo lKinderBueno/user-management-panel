@@ -440,7 +440,7 @@ export default function UserEditorPanel({
 
           <button
             type="button"
-            onClick={onDelete}
+            onClick={() => onDelete?.(user)}
             className="flex items-center gap-1.5 px-3 py-2 bg-[#f5365c] hover:bg-[#ec0c38] text-white font-semibold rounded text-xs shadow-argon-btn transition active:scale-[0.98]"
           >
             <Trash2 className="w-3.5 h-3.5" />

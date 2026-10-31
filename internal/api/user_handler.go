@@ -377,6 +377,38 @@ type DeleteRequest struct {
 	IDs []int `json:"ids"`
 }
 
+func (d *DeleteRequest) UnmarshalJSON(data []byte) error {
+	var direct struct {
+		IDs []int `json:"ids"`
+	}
+	if err := json.Unmarshal(data, &direct); err == nil {
+		d.IDs = direct.IDs
+		return nil
+	}
+
+	var raw struct {
+		IDs []any `json:"ids"`
+	}
+	if err := json.Unmarshal(data, &raw); err != nil {
+		return err
+	}
+
+	d.IDs = make([]int, 0, len(raw.IDs))
+	for _, item := range raw.IDs {
+		switch v := item.(type) {
+		case float64:
+			d.IDs = append(d.IDs, int(v))
+		case int:
+			d.IDs = append(d.IDs, v)
+		case string:
+			if parsed, err := strconv.Atoi(strings.TrimSpace(v)); err == nil {
+				d.IDs = append(d.IDs, parsed)
+			}
+		}
+	}
+	return nil
+}
+
 func (h *UserHandler) DeleteUsers(w http.ResponseWriter, r *http.Request) {
 	listIDStr := chi.URLParam(r, "listId")
 	listID, err := strconv.ParseUint(listIDStr, 10, 64)

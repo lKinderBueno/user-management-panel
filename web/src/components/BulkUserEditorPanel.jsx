@@ -657,7 +657,7 @@ export default function BulkUserEditorPanel({
 
           <button
             type="button"
-            onClick={onDelete}
+            onClick={() => onDelete?.(selectedUsers.map((u) => u.id))}
             className="flex items-center gap-1.5 px-3 py-2 bg-[#feecee] dark:bg-red-950/40 hover:bg-[#fdd8db] dark:hover:bg-red-900/50 text-[#f5365c] dark:text-red-400 border border-[#f5365c]/30 dark:border-red-800/40 rounded text-xs font-semibold transition active:scale-[0.98]"
             title="Delete all selected users"
           >
