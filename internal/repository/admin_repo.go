@@ -803,6 +803,7 @@ func (r *AdminRepo) GetAllTeamMembersForBackup(ctx context.Context) ([]models.Te
 		SELECT a.id, a.username, a.password_hash, COALESCE(a.role, 'admin'), 
 		       COALESCE(a.manage_all_playlists, 1), COALESCE(a.can_see_all_users, 1), 
 		       COALESCE(a.can_create_collaborators, 0), COALESCE(a.can_create_admins, 0),
+		       COALESCE(a.can_manage_api_tokens, 0),
 		       c.username
 		FROM admins a
 		LEFT JOIN admins c ON a.created_by = c.id
@@ -819,10 +820,10 @@ func (r *AdminRepo) GetAllTeamMembersForBackup(ctx context.Context) ([]models.Te
 	for rows.Next() {
 		var id int
 		var username, passwordHash, role string
-		var manageAll, canSeeAll, canCreateCollabs, canCreateAdmins int
+		var manageAll, canSeeAll, canCreateCollabs, canCreateAdmins, canManageTokens int
 		var creatorUser sql.NullString
 
-		if err := rows.Scan(&id, &username, &passwordHash, &role, &manageAll, &canSeeAll, &canCreateCollabs, &canCreateAdmins, &creatorUser); err != nil {
+		if err := rows.Scan(&id, &username, &passwordHash, &role, &manageAll, &canSeeAll, &canCreateCollabs, &canCreateAdmins, &canManageTokens, &creatorUser); err != nil {
 			return nil, fmt.Errorf("failed scanning team member for backup: %w", err)
 		}
 		if role == "subadmin" {
@@ -837,6 +838,7 @@ func (r *AdminRepo) GetAllTeamMembersForBackup(ctx context.Context) ([]models.Te
 			CanSeeAllUsers:         canSeeAll == 1 || role == "admin",
 			CanCreateCollaborators: canCreateCollabs == 1,
 			CanCreateAdmins:        canCreateAdmins == 1 && role == "admin",
+			CanManageAPITokens:     canManageTokens == 1 || role == "admin",
 		}
 		if creatorUser.Valid {
 			tb.CreatedByUsername = &creatorUser.String
@@ -899,6 +901,18 @@ func (r *AdminRepo) RestoreTeamMember(ctx context.Context, m models.TeamMemberBa
 	if m.CanCreateAdmins && role == "admin" {
 		canCreateAdminsInt = 1
 	}
+	canManageTokensInt := 0
+	if m.CanManageAPITokens || role == "admin" {
+		canManageTokensInt = 1
+	}
+
+	var createdByID *int
+	if m.CreatedByUsername != nil && *m.CreatedByUsername != "" {
+		var cid int
+		if errCreator := r.db.QueryRowContext(ctx, "SELECT id FROM admins WHERE username = ? LIMIT 1", *m.CreatedByUsername).Scan(&cid); errCreator == nil && cid > 0 {
+			createdByID = &cid
+		}
+	}
 
 	tx, err := r.db.BeginTx(ctx, nil)
 	if err != nil {
@@ -909,9 +923,9 @@ func (r *AdminRepo) RestoreTeamMember(ctx context.Context, m models.TeamMemberBa
 	if errors.Is(err, sql.ErrNoRows) || existingID == 0 {
 		// Does not exist -> INSERT
 		res, err := tx.ExecContext(ctx, `
-			INSERT INTO admins (username, password_hash, role, manage_all_playlists, can_see_all_users, can_create_collaborators, can_create_admins)
-			VALUES (?, ?, ?, ?, ?, ?, ?)
-		`, m.Username, m.PasswordHash, role, manageAllInt, canSeeAllInt, canCreateCollabsInt, canCreateAdminsInt)
+			INSERT INTO admins (username, password_hash, role, manage_all_playlists, can_see_all_users, can_create_collaborators, can_create_admins, can_manage_api_tokens, created_by)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?)
+		`, m.Username, m.PasswordHash, role, manageAllInt, canSeeAllInt, canCreateCollabsInt, canCreateAdminsInt, canManageTokensInt, createdByID)
 		if err != nil {
 			return false, false, false, fmt.Errorf("failed inserting team member %s: %w", m.Username, err)
 		}
@@ -945,9 +959,9 @@ func (r *AdminRepo) RestoreTeamMember(ctx context.Context, m models.TeamMemberBa
 
 	_, err = tx.ExecContext(ctx, `
 		UPDATE admins 
-		SET password_hash = ?, role = ?, manage_all_playlists = ?, can_see_all_users = ?, can_create_collaborators = ?, can_create_admins = ?
+		SET password_hash = ?, role = ?, manage_all_playlists = ?, can_see_all_users = ?, can_create_collaborators = ?, can_create_admins = ?, can_manage_api_tokens = ?, created_by = COALESCE(?, created_by)
 		WHERE id = ?
-	`, m.PasswordHash, targetRole, manageAllInt, canSeeAllInt, canCreateCollabsInt, canCreateAdminsInt, existingID)
+	`, m.PasswordHash, targetRole, manageAllInt, canSeeAllInt, canCreateCollabsInt, canCreateAdminsInt, canManageTokensInt, createdByID, existingID)
 	if err != nil {
 		return false, false, false, fmt.Errorf("failed updating team member %s: %w", m.Username, err)
 	}

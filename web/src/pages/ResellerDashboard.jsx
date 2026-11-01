@@ -860,6 +860,9 @@ export default function ResellerDashboard({
             updated.note = (bulkChanges.note || '').trim();
           }
         }
+        if (bulkChanges.enableMessage) {
+          updated.message = (bulkChanges.message || '').trim();
+        }
         if (bulkChanges.enableStatus) {
           updated.is_suspended = bulkChanges.is_suspended;
           if (!bulkChanges.is_suspended) {

@@ -21,6 +21,22 @@ import (
 // ErrDataUnchanged is returned when the remote server reports 429 Data Unchanged (within 120s cooldown on offset=0).
 var ErrDataUnchanged = errors.New("data unchanged")
 
+type forceSyncCtxKey struct{}
+
+// WithForceSync attaches a force-sync flag to ctx so stream download requests include force=1 on offset 0.
+func WithForceSync(ctx context.Context, force bool) context.Context {
+	return context.WithValue(ctx, forceSyncCtxKey{}, force)
+}
+
+// ForceSyncFromContext returns true if ctx carries a force-sync flag.
+func ForceSyncFromContext(ctx context.Context) bool {
+	if ctx == nil {
+		return false
+	}
+	v, _ := ctx.Value(forceSyncCtxKey{}).(bool)
+	return v
+}
+
 // RateLimitError represents an HTTP 429 rate limit error with retry instructions.
 type RateLimitError struct {
 	RetryAfter  time.Duration
@@ -435,6 +451,9 @@ func (c *APIClient) GetChannels(ctx context.Context, playlistID uint64, lastSent
 	params := url.Values{}
 	params.Set("playlist_id", strconv.FormatUint(playlistID, 10))
 	params.Set("last_sent_stream_id", strconv.FormatUint(lastSentStreamID, 10))
+	if lastSentStreamID == 0 && ForceSyncFromContext(ctx) {
+		params.Set("force", "1")
+	}
 	if len(limit) > 0 && limit[0] > 0 {
 		l := limit[0]
 		if l > 20000 {
@@ -505,6 +524,9 @@ func (c *APIClient) GetVods(ctx context.Context, playlistID uint64, lastSentStre
 	params := url.Values{}
 	params.Set("playlist_id", strconv.FormatUint(playlistID, 10))
 	params.Set("last_sent_stream_id", strconv.FormatUint(lastSentStreamID, 10))
+	if lastSentStreamID == 0 && ForceSyncFromContext(ctx) {
+		params.Set("force", "1")
+	}
 	if len(limit) > 0 && limit[0] > 0 {
 		l := limit[0]
 		if l > 20000 {
@@ -575,6 +597,9 @@ func (c *APIClient) GetSeries(ctx context.Context, playlistID uint64, lastSentSt
 	params := url.Values{}
 	params.Set("playlist_id", strconv.FormatUint(playlistID, 10))
 	params.Set("last_sent_stream_id", strconv.FormatUint(lastSentStreamID, 10))
+	if lastSentStreamID == 0 && ForceSyncFromContext(ctx) {
+		params.Set("force", "1")
+	}
 	if len(limit) > 0 && limit[0] > 0 {
 		l := limit[0]
 		if l > 20000 {
@@ -645,6 +670,9 @@ func (c *APIClient) GetSeriesEpisodes(ctx context.Context, playlistID uint64, la
 	params := url.Values{}
 	params.Set("playlist_id", strconv.FormatUint(playlistID, 10))
 	params.Set("last_sent_stream_id", strconv.FormatUint(lastSentStreamID, 10))
+	if lastSentStreamID == 0 && ForceSyncFromContext(ctx) {
+		params.Set("force", "1")
+	}
 	if len(limit) > 0 && limit[0] > 0 {
 		l := limit[0]
 		if l > 20000 {

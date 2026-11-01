@@ -45,7 +45,7 @@ export default function BackupReminderManager({ admin }) {
           newest &&
           prev.filename === newest.filename &&
           prev.created_at === newest.created_at &&
-          prev.file_size === newest.file_size
+          prev.size_bytes === newest.size_bytes
         ) {
           return prev;
         }

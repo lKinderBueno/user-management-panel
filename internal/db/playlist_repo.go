@@ -92,7 +92,6 @@ func (r *PlaylistRepo) UpsertPlaylist(ctx context.Context, p client.Playlist) er
 			tvg_id = VALUES(tvg_id),
 			gzip = VALUES(gzip),
 			epg_dummy = VALUES(epg_dummy),
-			max_connections = VALUES(max_connections),
 			time_shift = VALUES(time_shift),
 			patterns = VALUES(patterns),
 			expiry = VALUES(expiry),

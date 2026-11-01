@@ -116,6 +116,9 @@ func NewRouter(cfg RouterConfig) http.Handler {
 	var setupHandler *SetupHandler
 	if cfg.AdminRepo != nil && cfg.SettingsRepo != nil && cfg.APIClient != nil {
 		setupHandler = NewSetupHandler(cfg.AdminRepo, cfg.SettingsRepo, cfg.APIClient, cfg.Cache, cfg.SecurityService, cfg.Syncer)
+		if hostFilter != nil {
+			setupHandler.SetHostFilter(hostFilter)
+		}
 	}
 
 	playlistHandler := NewPlaylistHandler(cfg.PlaylistRepo, cfg.AdminRepo, cfg.Syncer, cfg.SyncLogRepo)
@@ -473,12 +476,15 @@ func NewRouter(cfg RouterConfig) http.Handler {
 					adminSub.Post("/security/users/{username}/unsuspend", securityHandler.UnsuspendUser)
 				}
 
+				adminSub.Get("/admin/security/ssl-domains", caddyHandler.GetSSLDomains)
+				adminSub.Post("/admin/security/test-domain", caddyHandler.TestDomainDNS)
 				adminSub.Get("/security/ssl-domains", caddyHandler.GetSSLDomains)
 				adminSub.Post("/security/test-domain", caddyHandler.TestDomainDNS)
 
 				// Automation & Dashboard Settings (Pure admin only)
 				if cfg.SettingsRepo != nil && cfg.Scheduler != nil && cfg.BackupService != nil {
 					settingsHandler := NewSettingsHandler(cfg.SettingsRepo, cfg.BackupService, cfg.Scheduler, cfg.Syncer)
+					backupHandler.SetOnSettingsRestored(settingsHandler.ApplySettingsToRuntime)
 					if cfg.Cache != nil {
 						settingsHandler.SetCache(cfg.Cache)
 					}

@@ -144,8 +144,14 @@ export default function ResellerBulkEditor({ currentPlaylist, onUsersUpdated }) 
         }
       }
 
-      await Promise.all(
-        updates.map((u) => userApi.updateUser(currentPlaylist.id, u.id, u))
+      await userApi.bulkUpdateCategories(
+        currentPlaylist.id,
+        updates.map((u) => ({
+          id: u.id,
+          channels_categories: u.channels_categories,
+          vods_categories: u.vods_categories,
+          series_categories: u.series_categories,
+        }))
       );
 
       localStorage.setItem('res-bulk-mode', mode);

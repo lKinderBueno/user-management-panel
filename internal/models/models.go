@@ -176,14 +176,15 @@ type Playlist struct {
 
 // PlaylistPortalBranding represents per-playlist branding configuration for the user portal.
 type PlaylistPortalBranding struct {
-	Enabled         bool   `json:"enabled"`
-	Title           string `json:"title,omitempty"`
-	Logo            string `json:"logo,omitempty"`
-	HTML            string `json:"html,omitempty"`
-	PrimaryColor    string `json:"primary_color,omitempty"`
-	SecondaryColor  string `json:"secondary_color,omitempty"`
-	AccentColor     string `json:"accent_color,omitempty"`
-	BackgroundTheme string `json:"background_theme,omitempty"`
+	Enabled             bool   `json:"enabled"`
+	Title               string `json:"title,omitempty"`
+	Logo                string `json:"logo,omitempty"`
+	HTML                string `json:"html,omitempty"`
+	PrimaryColor        string `json:"primary_color,omitempty"`
+	SecondaryColor      string `json:"secondary_color,omitempty"`
+	AccentColor         string `json:"accent_color,omitempty"`
+	BackgroundTheme     string `json:"background_theme,omitempty"`
+	AllowHideCategories *bool  `json:"allow_hide_categories,omitempty"`
 }
 
 // WelcomeWhere indicates where welcome info is displayed.
@@ -251,6 +252,8 @@ type UserExpirySyncCandidate struct {
 	ListID         uint64          `json:"list_id"`
 	ID             int             `json:"id"`
 	Name           string          `json:"name"`
+	Username       string          `json:"username"`
+	Password       string          `json:"password"`
 	Expiry         *time.Time      `json:"expiry"`
 	MaxConnections int             `json:"max_connections"`
 	Patterns       json.RawMessage `json:"patterns"`

@@ -192,6 +192,9 @@ export default function UserPortal() {
             secondary_color: cfg.user_dashboard_secondary_color || '#6366f1',
             accent_color: cfg.user_dashboard_accent_color || '#10b981',
             background_theme: cfg.user_dashboard_background_theme || 'slate',
+            admin_hostname: cfg.admin_hostname || '',
+            block_streaming_on_admin_host: cfg.block_streaming_on_admin_host !== undefined ? Boolean(cfg.block_streaming_on_admin_host) : true,
+            restrict_admin_to_admin_host: Boolean(cfg.restrict_admin_to_admin_host),
           };
           defaultPortalConfigRef.current = configObj;
           setPortalConfig(configObj);
@@ -243,6 +246,10 @@ export default function UserPortal() {
           secondary_color: branding.secondary_color || prev.secondary_color,
           accent_color: branding.accent_color || prev.accent_color,
           background_theme: branding.background_theme || prev.background_theme,
+          allow_hide_categories:
+            branding.allow_hide_categories !== undefined && branding.allow_hide_categories !== null
+              ? Boolean(branding.allow_hide_categories)
+              : prev.allow_hide_categories,
         }));
       }
 
@@ -337,6 +344,9 @@ export default function UserPortal() {
             secondary_color: cfg.user_dashboard_secondary_color || '#6366f1',
             accent_color: cfg.user_dashboard_accent_color || '#10b981',
             background_theme: cfg.user_dashboard_background_theme || 'slate',
+            admin_hostname: cfg.admin_hostname || '',
+            block_streaming_on_admin_host: cfg.block_streaming_on_admin_host !== undefined ? Boolean(cfg.block_streaming_on_admin_host) : true,
+            restrict_admin_to_admin_host: Boolean(cfg.restrict_admin_to_admin_host),
           });
         }
       }).catch(() => { });

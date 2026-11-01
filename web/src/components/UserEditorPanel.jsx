@@ -286,33 +286,49 @@ export default function UserEditorPanel({
         />
       </div>
 
-      {/* Notes & Max Connections */}
-      <div className="pt-3 border-t border-[#e9ecef] dark:border-slate-800 grid grid-cols-1 sm:grid-cols-12 gap-3">
-        <div className="sm:col-span-8">
-          <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
-            <FileText className="w-3.5 h-3.5 text-[#8898aa] dark:text-slate-400" />
-            <span>Internal Notes</span>
-          </label>
-          <textarea
-            rows={2}
-            value={user.note || ''}
-            onChange={(e) => onUserChange({ ...user, note: e.target.value })}
-            placeholder="Internal notes for this user..."
-            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs text-[#32325d] dark:text-slate-100 placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 transition shadow-sm resize-none"
-          />
+      {/* Notes, User Message & Max Connections */}
+      <div className="pt-3 border-t border-[#e9ecef] dark:border-slate-800 space-y-3">
+        <div className="grid grid-cols-1 sm:grid-cols-12 gap-3">
+          <div className="sm:col-span-8">
+            <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-[#8898aa] dark:text-slate-400" />
+              <span>Internal Notes</span>
+            </label>
+            <textarea
+              rows={2}
+              value={user.note || ''}
+              onChange={(e) => onUserChange({ ...user, note: e.target.value })}
+              placeholder="Internal notes for this user..."
+              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs text-[#32325d] dark:text-slate-100 placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 transition shadow-sm resize-none"
+            />
+          </div>
+
+          <div className="sm:col-span-4">
+            <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider mb-1">
+              Max Connections
+            </label>
+            <input
+              type="number"
+              min="1"
+              max="100"
+              value={user.max_connections || 1}
+              onChange={(e) => onUserChange({ ...user, max_connections: Number(e.target.value) || 1 })}
+              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs text-[#32325d] dark:text-slate-100 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 transition shadow-sm"
+            />
+          </div>
         </div>
 
-        <div className="sm:col-span-4">
-          <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider mb-1">
-            Max Connections
+        <div>
+          <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider mb-1 flex items-center gap-1.5">
+            <Info className="w-3.5 h-3.5 text-[#3970e1] dark:text-blue-400" />
+            <span>User Portal Notice / Welcome Message</span>
           </label>
           <input
-            type="number"
-            min="1"
-            max="10"
-            value={user.max_connections || 1}
-            onChange={(e) => onUserChange({ ...user, max_connections: Number(e.target.value) || 1 })}
-            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs text-[#32325d] dark:text-slate-100 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 transition shadow-sm"
+            type="text"
+            value={user.message || ''}
+            onChange={(e) => onUserChange({ ...user, message: e.target.value })}
+            placeholder="Optional notice displayed to this user in the User Portal and Xtream API..."
+            className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs text-[#32325d] dark:text-slate-100 placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 transition shadow-sm"
           />
         </div>
       </div>

@@ -198,7 +198,7 @@ func IsAdminRoute(path string) bool {
 	if strings.HasPrefix(p, "/api/admin") ||
 		strings.HasPrefix(p, "/api/auth") ||
 		strings.HasPrefix(p, "/api/team") ||
-		strings.HasPrefix(p, "/token/s") ||
+		strings.HasPrefix(p, "/api/tokens") ||
 		strings.HasPrefix(p, "/api/playlists") ||
 		strings.HasPrefix(p, "/api/users") ||
 		strings.HasPrefix(p, "/api/security") ||

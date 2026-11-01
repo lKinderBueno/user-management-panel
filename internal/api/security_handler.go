@@ -7,6 +7,7 @@ import (
 	"strings"
 
 	"github.com/go-chi/chi/v5"
+	"playlistlabs_user_management_os/internal/auth"
 	"playlistlabs_user_management_os/internal/cache"
 	"playlistlabs_user_management_os/internal/models"
 	"playlistlabs_user_management_os/internal/repository"
@@ -283,7 +284,9 @@ func (h *SecurityHandler) ResolveIncident(w http.ResponseWriter, r *http.Request
 	}
 
 	resolvedBy := "admin"
-	if username, ok := r.Context().Value("username").(string); ok && username != "" {
+	if claims, ok := r.Context().Value(auth.AdminContextKey).(*auth.Claims); ok && claims != nil && claims.Username != "" {
+		resolvedBy = claims.Username
+	} else if username, ok := r.Context().Value("username").(string); ok && username != "" {
 		resolvedBy = username
 	}
 
@@ -294,6 +297,7 @@ func (h *SecurityHandler) ResolveIncident(w http.ResponseWriter, r *http.Request
 
 	if h.cache != nil && h.cache.IsAvailable() {
 		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:user:")
+		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:redirect:")
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{

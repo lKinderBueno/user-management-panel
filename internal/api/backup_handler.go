@@ -18,11 +18,12 @@ import (
 )
 
 type BackupHandler struct {
-	userRepo     *repository.UserRepo
-	playlistRepo *repository.PlaylistRepo
-	adminRepo    *repository.AdminRepo
-	settingsRepo *repository.SettingsRepo
-	service      *backup.Service
+	userRepo           *repository.UserRepo
+	playlistRepo       *repository.PlaylistRepo
+	adminRepo          *repository.AdminRepo
+	settingsRepo       *repository.SettingsRepo
+	service            *backup.Service
+	onSettingsRestored func(*models.SystemSettings)
 }
 
 func NewBackupHandler(
@@ -54,6 +55,11 @@ func NewBackupHandler(
 // GetService returns the underlying backup service.
 func (h *BackupHandler) GetService() *backup.Service {
 	return h.service
+}
+
+// SetOnSettingsRestored registers a callback invoked after system settings are restored.
+func (h *BackupHandler) SetOnSettingsRestored(fn func(*models.SystemSettings)) {
+	h.onSettingsRestored = fn
 }
 
 type BackupPayload = models.BackupPayload
@@ -237,6 +243,12 @@ func (h *BackupHandler) RestoreUsers(w http.ResponseWriter, r *http.Request) {
 			"message": err.Error(),
 		})
 		return
+	}
+
+	if result != nil && result.SettingsRestored && h.settingsRepo != nil && h.onSettingsRestored != nil {
+		if s, err := h.settingsRepo.Get(r.Context()); err == nil && s != nil {
+			h.onSettingsRestored(s)
+		}
 	}
 
 	writeJSON(w, http.StatusOK, result)

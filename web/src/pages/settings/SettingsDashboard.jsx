@@ -287,6 +287,7 @@ export default function SettingsDashboard({
           playlist_sync_force: false,
           epg_max_days: settingsRes.settings.epg_max_days !== undefined ? settingsRes.settings.epg_max_days : 4,
           expiry_sync_interval_hours: settingsRes.settings.expiry_sync_interval_hours || 12,
+          expiry_sync_days_range: settingsRes.settings.expiry_sync_days_range || 5,
           expiry_sync_enabled: Boolean(settingsRes.settings.expiry_sync_enabled),
           expiry_sync_all: Boolean(settingsRes.settings.expiry_sync_all),
           backup_interval_hours: settingsRes.settings.backup_interval_hours || 24,
@@ -359,7 +360,14 @@ export default function SettingsDashboard({
     const interval = setInterval(() => {
       loadAll(true, false);
     }, 10000);
-    return () => clearInterval(interval);
+    const handleSettingsUpdated = () => {
+      loadAll(true, true);
+    };
+    window.addEventListener('settings-updated', handleSettingsUpdated);
+    return () => {
+      clearInterval(interval);
+      window.removeEventListener('settings-updated', handleSettingsUpdated);
+    };
   }, [loadAll]);
 
   // Test PlaylistLabs Token
@@ -443,6 +451,7 @@ export default function SettingsDashboard({
         playlist_sync_enabled: Boolean(form.playlist_sync_enabled),
         epg_max_days: parseInt(form.epg_max_days, 10) || 4,
         expiry_sync_interval_hours: parseInt(form.expiry_sync_interval_hours, 10) || 1,
+        expiry_sync_days_range: parseInt(form.expiry_sync_days_range, 10) || 5,
         backup_interval_hours: parseInt(form.backup_interval_hours, 10) || 1,
         backup_retention_days: parseInt(form.backup_retention_days, 10) || 30,
         security_log_retention_days: parseInt(form.security_log_retention_days, 10) || 7,

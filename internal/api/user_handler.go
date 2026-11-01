@@ -279,11 +279,18 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 	}
 
 	if u.MaxConnections <= 0 {
-		u.MaxConnections = 1
+		if h.playlistRepo != nil {
+			if pl, err := h.playlistRepo.GetByID(r.Context(), listID); err == nil && pl != nil && pl.MaxConnections > 0 {
+				u.MaxConnections = pl.MaxConnections
+			}
+		}
+		if u.MaxConnections <= 0 {
+			u.MaxConnections = 1
+		}
 	}
 
 	// 5. Expiry & automatic provider synchronization upon user addition
-	if (u.SyncExpiryDate || u.Expiry == nil) && h.xtreamClient != nil {
+	if u.SyncExpiryDate && h.xtreamClient != nil {
 		info, err := h.fetchProviderUserInfo(r.Context(), listID, u.Patterns, u.Username, u.Password)
 		if err == nil && info != nil && info.Updated {
 			u.Expiry = &info.Expiry
@@ -291,10 +298,10 @@ func (h *UserHandler) CreateUser(w http.ResponseWriter, r *http.Request) {
 				u.MaxConnections = info.MaxConnections
 			}
 		}
-	}
-	if u.Expiry == nil {
-		exp := time.Now().AddDate(1, 0, 0) // default 1 year fallback
-		u.Expiry = &exp
+		if u.Expiry == nil {
+			exp := time.Now().AddDate(1, 0, 0) // default 1 year fallback when sync fails
+			u.Expiry = &exp
+		}
 	}
 
 	// Set creator ID
@@ -560,6 +567,7 @@ func (h *UserHandler) BulkUpdateCategories(w http.ResponseWriter, r *http.Reques
 
 	if h.cache != nil && h.cache.IsAvailable() {
 		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:user:")
+		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:redirect:")
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{"success": true, "updated_count": len(req.Updates)})
@@ -638,6 +646,7 @@ func (h *UserHandler) BulkUpdatePatterns(w http.ResponseWriter, r *http.Request)
 
 	if h.cache != nil && h.cache.IsAvailable() {
 		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:user:")
+		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:redirect:")
 	}
 
 	writeJSON(w, http.StatusOK, res)

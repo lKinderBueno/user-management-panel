@@ -1049,7 +1049,7 @@ func (r *UserRepo) GetUsersForExpirySync(ctx context.Context, all bool, daysRang
 
 	if all {
 		query = `
-			SELECT u.list_id, u.id, u.name, u.expiry, u.patterns, COALESCE(p.patterns, '[]'), u.max_connections
+			SELECT u.list_id, u.id, u.name, u.username, u.password, u.expiry, u.patterns, COALESCE(p.patterns, '[]'), u.max_connections
 			FROM managed_users u
 			LEFT JOIN playlists p ON u.list_id = p.id
 			WHERE u.sync_expiry_date = 1
@@ -1058,7 +1058,7 @@ func (r *UserRepo) GetUsersForExpirySync(ctx context.Context, all bool, daysRang
 		rows, err = r.db.QueryContext(ctx, query)
 	} else {
 		query = `
-			SELECT u.list_id, u.id, u.name, u.expiry, u.patterns, COALESCE(p.patterns, '[]'), u.max_connections
+			SELECT u.list_id, u.id, u.name, u.username, u.password, u.expiry, u.patterns, COALESCE(p.patterns, '[]'), u.max_connections
 			FROM managed_users u
 			LEFT JOIN playlists p ON u.list_id = p.id
 			WHERE (
@@ -1090,7 +1090,7 @@ func (r *UserRepo) GetUsersForExpirySync(ctx context.Context, all bool, daysRang
 			maxConn       sql.NullInt64
 		)
 
-		if err := rows.Scan(&c.ListID, &c.ID, &c.Name, &c.Expiry, &patternsStr, &plPatternsStr, &maxConn); err != nil {
+		if err := rows.Scan(&c.ListID, &c.ID, &c.Name, &c.Username, &c.Password, &c.Expiry, &patternsStr, &plPatternsStr, &maxConn); err != nil {
 			return nil, fmt.Errorf("failed scanning user for expiry sync: %w", err)
 		}
 
@@ -1264,13 +1264,22 @@ func ApplyPatternAction(patterns []models.PatternItem, req models.BulkPatternReq
 
 // BulkUpdatePatterns performs bulk modifications on customer patterns matching the criteria.
 func (r *UserRepo) BulkUpdatePatterns(ctx context.Context, listID uint64, req models.BulkPatternRequest, creatorAdminID *int) (*models.BulkPatternResponse, error) {
+	if req.Scope == "selected" && len(req.UserIDs) == 0 {
+		return &models.BulkPatternResponse{
+			Success:          true,
+			AffectedUsers:    0,
+			ModifiedPatterns: 0,
+			Message:          "No users selected for pattern modification",
+		}, nil
+	}
+
 	var whereClauses []string
 	var args []interface{}
 
 	if req.Scope == "all_playlists" {
 		// All playlists
 	} else {
-		whereClauses = append(whereClauses, "list_id = ?")
+		whereClauses = append(whereClauses, "u.list_id = ?")
 		args = append(args, listID)
 	}
 
@@ -1280,11 +1289,11 @@ func (r *UserRepo) BulkUpdatePatterns(ctx context.Context, listID uint64, req mo
 			placeholders[i] = "?"
 			args = append(args, uid)
 		}
-		whereClauses = append(whereClauses, fmt.Sprintf("id IN (%s)", strings.Join(placeholders, ",")))
+		whereClauses = append(whereClauses, fmt.Sprintf("u.id IN (%s)", strings.Join(placeholders, ",")))
 	}
 
 	if creatorAdminID != nil {
-		whereClauses = append(whereClauses, "created_by_admin_id = ?")
+		whereClauses = append(whereClauses, "u.created_by_admin_id = ?")
 		args = append(args, *creatorAdminID)
 	}
 
@@ -1293,7 +1302,11 @@ func (r *UserRepo) BulkUpdatePatterns(ctx context.Context, listID uint64, req mo
 		whereSQL = " WHERE " + strings.Join(whereClauses, " AND ")
 	}
 
-	query := fmt.Sprintf("SELECT list_id, id, patterns FROM managed_users%s", whereSQL)
+	query := fmt.Sprintf(`
+		SELECT u.list_id, u.id, u.patterns, COALESCE(p.patterns, '[]')
+		FROM managed_users u
+		LEFT JOIN playlists p ON p.id = u.list_id%s
+	`, whereSQL)
 	rows, err := r.db.QueryContext(ctx, query, args...)
 	if err != nil {
 		return nil, fmt.Errorf("failed querying users for bulk patterns: %w", err)
@@ -1313,14 +1326,27 @@ func (r *UserRepo) BulkUpdatePatterns(ctx context.Context, listID uint64, req mo
 		var uListID uint64
 		var uID int
 		var rawPatterns string
+		var rawPlPatterns string
 
-		if err := rows.Scan(&uListID, &uID, &rawPatterns); err != nil {
+		if err := rows.Scan(&uListID, &uID, &rawPatterns, &rawPlPatterns); err != nil {
 			return nil, fmt.Errorf("failed scanning user: %w", err)
 		}
 
 		var patterns []models.PatternItem
 		if rawPatterns != "" && rawPatterns != "null" {
 			_ = json.Unmarshal([]byte(rawPatterns), &patterns)
+		}
+
+		// When a user has no explicit patterns (inheriting from playlist) and we are not updating
+		// the playlist patterns directly (or we are targeting selected users), materialize playlist patterns first.
+		if len(patterns) == 0 && (!req.UpdatePlaylist || req.Scope == "selected") && req.Action != "add" {
+			var plPatterns []models.PatternItem
+			if rawPlPatterns != "" && rawPlPatterns != "null" {
+				_ = json.Unmarshal([]byte(rawPlPatterns), &plPatterns)
+			}
+			if len(plPatterns) > 0 {
+				patterns = models.MergePatterns(plPatterns, patterns)
+			}
 		}
 
 		newPatterns, modCount, changed := ApplyPatternAction(patterns, req)
@@ -1449,6 +1475,12 @@ func (r *UserRepo) UpdatePatternURLs(ctx context.Context, listID uint64, replace
 				trimmedOld := strings.TrimRight(oldURL, "/")
 				if rawURL == oldURL || (trimmedOld != "" && trimmedRaw == trimmedOld) {
 					p["url"] = newURL
+					if rawCURL, hasCURL := p["cUrl"].(string); hasCURL && rawCURL != "" {
+						trimmedCURL := strings.TrimRight(strings.TrimSpace(rawCURL), "/")
+						if rawCURL == oldURL || (trimmedOld != "" && trimmedCURL == trimmedOld) {
+							p["cUrl"] = newURL
+						}
+					}
 					delete(p, "oldUrl")
 					delete(p, "_old")
 					userChanged = true

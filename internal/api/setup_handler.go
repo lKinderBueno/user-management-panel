@@ -30,6 +30,7 @@ type SetupHandler struct {
 	appCache     cache.Cache
 	secSvc       *security.Service
 	syncerEngine models.PlaylistSyncer
+	hostFilter   *security.HostFilter
 	mu           sync.Mutex
 }
 
@@ -53,6 +54,10 @@ func NewSetupHandler(
 		secSvc:       secSvc,
 		syncerEngine: se,
 	}
+}
+
+func (h *SetupHandler) SetHostFilter(hf *security.HostFilter) {
+	h.hostFilter = hf
 }
 
 type SetupStatusResponse struct {
@@ -456,11 +461,13 @@ func (h *SetupHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Domain Isolation (Advanced only)
-	if req.SetupMode == "advanced" && req.AdminHostname != "" {
-		sysSettings.AdminHostname = strings.TrimSpace(req.AdminHostname)
-		sysSettings.BlockStreamingOnAdminHost = req.BlockStreamingOnAdminHost
-		sysSettings.RestrictAdminToAdminHost = req.RestrictAdminToAdminHost
+	if req.SetupMode == "advanced" {
 		sysSettings.BlockDirectIPStreaming = req.BlockDirectIPStreaming
+		if req.AdminHostname != "" {
+			sysSettings.AdminHostname = strings.TrimSpace(req.AdminHostname)
+			sysSettings.BlockStreamingOnAdminHost = req.BlockStreamingOnAdminHost
+			sysSettings.RestrictAdminToAdminHost = req.RestrictAdminToAdminHost
+		}
 	}
 
 	initSyncTime := time.Now().UTC()
@@ -474,6 +481,17 @@ func (h *SetupHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 	h.apiClient.SetBaseURL(req.APIURL)
 	h.apiClient.SetAPIToken(req.APIToken)
 	h.apiClient.SetPassword(req.APIPassword)
+	if h.syncerEngine != nil {
+		if su, ok := h.syncerEngine.(interface{ SetBaseURL(string) }); ok {
+			su.SetBaseURL(req.APIURL)
+		}
+		if st, ok := h.syncerEngine.(interface{ SetAPIToken(string) }); ok {
+			st.SetAPIToken(req.APIToken)
+		}
+		if sp, ok := h.syncerEngine.(interface{ SetPassword(string) }); ok {
+			sp.SetPassword(req.APIPassword)
+		}
+	}
 	if h.appCache != nil {
 		h.appCache.SetSettings(
 			sysSettings.CacheEnabled,
@@ -489,6 +507,16 @@ func (h *SetupHandler) Initialize(w http.ResponseWriter, r *http.Request) {
 			sysSettings.AntiBruteForceMaxAttempts,
 			sysSettings.AntiBruteForceWindowMinutes,
 		)
+		h.secSvc.SetMultiIPSettings(
+			sysSettings.MultiIPDetectionEnabled,
+			sysSettings.MultiIPMaxSubnets,
+			sysSettings.MultiIPWindowHours,
+			sysSettings.MultiIPAutoSuspend,
+		)
+		h.secSvc.SetRetentionDays(sysSettings.SecurityLogRetentionDays)
+	}
+	if h.hostFilter != nil {
+		h.hostFilter.SetSettings(sysSettings)
 	}
 
 	// Trigger asynchronous initial sync if syncerEngine is configured

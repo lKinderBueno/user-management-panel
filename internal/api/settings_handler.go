@@ -286,6 +286,26 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 		return
 	}
 
+	h.ApplySettingsToRuntime(&s)
+
+	status, err := h.scheduler.GetStatus(r.Context())
+	if err != nil {
+		writeJSON(w, http.StatusOK, map[string]interface{}{
+			"success":  true,
+			"settings": s,
+		})
+		return
+	}
+	h.populateCacheStatus(r.Context(), status)
+	writeJSON(w, http.StatusOK, status)
+}
+
+// ApplySettingsToRuntime propagates SystemSettings changes to live in-memory services.
+func (h *SettingsHandler) ApplySettingsToRuntime(s *models.SystemSettings) {
+	if h == nil || s == nil {
+		return
+	}
+
 	// Update API client and syncer engine active API credentials live in runtime
 	if h.apiClient != nil {
 		if strings.TrimSpace(s.IPTVEditorAPIURL) != "" {
@@ -357,24 +377,13 @@ func (h *SettingsHandler) UpdateSettings(w http.ResponseWriter, r *http.Request)
 
 	// Update throttler live in runtime
 	if h.throttler != nil {
-		h.throttler.SetSettings(&s)
+		h.throttler.SetSettings(s)
 	}
 
 	// Update host filter live in runtime
 	if h.hostFilter != nil {
-		h.hostFilter.SetSettings(&s)
+		h.hostFilter.SetSettings(s)
 	}
-
-	status, err := h.scheduler.GetStatus(r.Context())
-	if err != nil {
-		writeJSON(w, http.StatusOK, map[string]interface{}{
-			"success":  true,
-			"settings": s,
-		})
-		return
-	}
-	h.populateCacheStatus(r.Context(), status)
-	writeJSON(w, http.StatusOK, status)
 }
 
 func (h *SettingsHandler) populateCacheStatus(ctx context.Context, resp *models.SettingsResponse) {
@@ -835,6 +844,16 @@ func (h *SettingsHandler) RestoreStoredBackup(w http.ResponseWriter, r *http.Req
 			"message": err.Error(),
 		})
 		return
+	}
+
+	if result != nil && result.SettingsRestored && h.settingsRepo != nil {
+		if s, err := h.settingsRepo.Get(r.Context()); err == nil && s != nil {
+			h.ApplySettingsToRuntime(s)
+		}
+	}
+	if h.cache != nil && h.cache.IsAvailable() {
+		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:user:")
+		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:redirect:")
 	}
 
 	writeJSON(w, http.StatusOK, result)

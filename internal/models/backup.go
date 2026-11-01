@@ -4,7 +4,9 @@ import "encoding/json"
 
 // SystemSettingsBackup represents the configuration settings in a backup payload.
 type SystemSettingsBackup struct {
+	IPTVEditorAPIURL          string `json:"iptveditor_api_url,omitempty"`
 	IPTVEditorAPIToken        string `json:"iptveditor_api_token,omitempty"`
+	IPTVEditorAPIPassword     string `json:"iptveditor_api_password,omitempty"`
 	TMDBApiKey                string `json:"tmdb_api_key,omitempty"`
 	HasToken                  bool   `json:"has_token"`
 	PlaylistSyncIntervalHours int    `json:"playlist_sync_interval_hours"`
@@ -95,6 +97,7 @@ type TeamMemberBackup struct {
 	CanSeeAllUsers         bool        `json:"can_see_all_users"`
 	CanCreateCollaborators bool        `json:"can_create_collaborators"`
 	CanCreateAdmins        bool        `json:"can_create_admins"`
+	CanManageAPITokens     bool        `json:"can_manage_api_tokens"`
 	CreatedByUsername      *string     `json:"created_by_username,omitempty"`
 	AllowedPlaylistIDs     Uint64Slice `json:"allowed_playlist_ids,omitempty"`
 }

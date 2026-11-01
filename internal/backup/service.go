@@ -92,8 +92,11 @@ func (s *Service) CreateBackupPayload(ctx context.Context, listID *uint64, backu
 		if err == nil && sys != nil {
 			tokenIncluded := includeToken && strings.TrimSpace(sys.IPTVEditorAPIToken) != ""
 			tmdbIncluded := includeToken && strings.TrimSpace(sys.TMDBApiKey) != ""
+			captchaSecretIncluded := includeToken && strings.TrimSpace(sys.CaptchaSecretKey) != ""
+			apiPassIncluded := includeToken && strings.TrimSpace(sys.IPTVEditorAPIPassword) != ""
 			sysSettingsBackup = &models.SystemSettingsBackup{
-				HasToken:                  tokenIncluded || tmdbIncluded,
+				IPTVEditorAPIURL:          sys.IPTVEditorAPIURL,
+				HasToken:                  tokenIncluded || tmdbIncluded || captchaSecretIncluded || apiPassIncluded,
 				PlaylistSyncIntervalHours: sys.PlaylistSyncIntervalHours,
 				PlaylistSyncMinuteOffset:  sys.PlaylistSyncMinuteOffset,
 				PlaylistSyncEnabled:       sys.PlaylistSyncEnabled,
@@ -154,10 +157,13 @@ func (s *Service) CreateBackupPayload(ctx context.Context, listID *uint64, backu
 			if tokenIncluded {
 				sysSettingsBackup.IPTVEditorAPIToken = sys.IPTVEditorAPIToken
 			}
+			if apiPassIncluded {
+				sysSettingsBackup.IPTVEditorAPIPassword = sys.IPTVEditorAPIPassword
+			}
 			if tmdbIncluded {
 				sysSettingsBackup.TMDBApiKey = sys.TMDBApiKey
 			}
-			if includeToken && sys.CaptchaSecretKey != "" {
+			if captchaSecretIncluded {
 				sysSettingsBackup.CaptchaSecretKey = sys.CaptchaSecretKey
 			}
 		}
@@ -325,7 +331,10 @@ func (s *Service) ListStoredBackups() ([]models.BackupFileMetadata, error) {
 				listName = preview.PlaylistName
 				if preview.SystemSettings != nil {
 					hasSettings = true
-					if strings.TrimSpace(preview.SystemSettings.IPTVEditorAPIToken) != "" || strings.TrimSpace(preview.SystemSettings.TMDBApiKey) != "" {
+					if strings.TrimSpace(preview.SystemSettings.IPTVEditorAPIToken) != "" ||
+						strings.TrimSpace(preview.SystemSettings.TMDBApiKey) != "" ||
+						strings.TrimSpace(preview.SystemSettings.CaptchaSecretKey) != "" ||
+						strings.TrimSpace(preview.SystemSettings.IPTVEditorAPIPassword) != "" {
 						hasToken = true
 					}
 				}
@@ -484,29 +493,29 @@ func (s *Service) RestoreFromPayload(ctx context.Context, payload *models.Backup
 				cur.TrackingTimeoutMinutes = payload.SystemSettings.TrackingTimeoutMinutes
 			}
 
-			// Restore portal studio / user dashboard customization if present in backup
+			// Restore portal studio / user dashboard customization
+			cur.UserDashboardEnabled = payload.SystemSettings.UserDashboardEnabled
+			cur.UserDashboardAllowHideCategories = payload.SystemSettings.UserDashboardAllowHideCategories
 			if payload.SystemSettings.UserDashboardTitle != "" {
 				cur.UserDashboardTitle = payload.SystemSettings.UserDashboardTitle
-				cur.UserDashboardEnabled = payload.SystemSettings.UserDashboardEnabled
-				cur.UserDashboardAllowHideCategories = payload.SystemSettings.UserDashboardAllowHideCategories
-				if payload.SystemSettings.UserDashboardHTML != "" {
-					cur.UserDashboardHTML = payload.SystemSettings.UserDashboardHTML
-				}
-				if payload.SystemSettings.UserDashboardLogo != "" {
-					cur.UserDashboardLogo = payload.SystemSettings.UserDashboardLogo
-				}
-				if payload.SystemSettings.UserDashboardPrimaryColor != "" {
-					cur.UserDashboardPrimaryColor = payload.SystemSettings.UserDashboardPrimaryColor
-				}
-				if payload.SystemSettings.UserDashboardSecondaryColor != "" {
-					cur.UserDashboardSecondaryColor = payload.SystemSettings.UserDashboardSecondaryColor
-				}
-				if payload.SystemSettings.UserDashboardAccentColor != "" {
-					cur.UserDashboardAccentColor = payload.SystemSettings.UserDashboardAccentColor
-				}
-				if payload.SystemSettings.UserDashboardBackgroundTheme != "" {
-					cur.UserDashboardBackgroundTheme = payload.SystemSettings.UserDashboardBackgroundTheme
-				}
+			}
+			if payload.SystemSettings.UserDashboardHTML != "" {
+				cur.UserDashboardHTML = payload.SystemSettings.UserDashboardHTML
+			}
+			if payload.SystemSettings.UserDashboardLogo != "" {
+				cur.UserDashboardLogo = payload.SystemSettings.UserDashboardLogo
+			}
+			if payload.SystemSettings.UserDashboardPrimaryColor != "" {
+				cur.UserDashboardPrimaryColor = payload.SystemSettings.UserDashboardPrimaryColor
+			}
+			if payload.SystemSettings.UserDashboardSecondaryColor != "" {
+				cur.UserDashboardSecondaryColor = payload.SystemSettings.UserDashboardSecondaryColor
+			}
+			if payload.SystemSettings.UserDashboardAccentColor != "" {
+				cur.UserDashboardAccentColor = payload.SystemSettings.UserDashboardAccentColor
+			}
+			if payload.SystemSettings.UserDashboardBackgroundTheme != "" {
+				cur.UserDashboardBackgroundTheme = payload.SystemSettings.UserDashboardBackgroundTheme
 			}
 
 			// Restore Throttling & Limits
@@ -584,10 +593,17 @@ func (s *Service) RestoreFromPayload(ctx context.Context, payload *models.Backup
 				cur.EPGMaxDays = payload.SystemSettings.EPGMaxDays
 			}
 
+			if payload.SystemSettings.IPTVEditorAPIURL != "" {
+				cur.IPTVEditorAPIURL = payload.SystemSettings.IPTVEditorAPIURL
+			}
+
 			// Restore token only if explicitly requested and token is present
 			if req.RestoreToken && payload.SystemSettings.IPTVEditorAPIToken != "" {
 				cur.IPTVEditorAPIToken = payload.SystemSettings.IPTVEditorAPIToken
 				tokenRestored = true
+			}
+			if req.RestoreToken && payload.SystemSettings.IPTVEditorAPIPassword != "" {
+				cur.IPTVEditorAPIPassword = payload.SystemSettings.IPTVEditorAPIPassword
 			}
 			if req.RestoreToken && payload.SystemSettings.TMDBApiKey != "" {
 				cur.TMDBApiKey = payload.SystemSettings.TMDBApiKey
@@ -801,12 +817,6 @@ func (s *Service) RestoreFromPayload(ctx context.Context, payload *models.Backup
 				targetID = nextID
 			}
 			u.ID = targetID
-
-			if u.Expiry == nil {
-				defaultExp := time.Now().AddDate(1, 0, 0)
-				u.Expiry = &defaultExp
-			}
-
 			u.CreatedByAdminID = &adminID
 
 			if u.MaxConnections <= 0 {

@@ -162,19 +162,36 @@ func ContainsCategoryID(list []uint64, id uint64) bool {
 	return false
 }
 
+// IsCategoryAllowed checks whether a category ID is permitted given optional allowedCatIDs and hiddenCatIDs.
+// A nil allowedCatIDs slice means unrestricted (all non-hidden categories are allowed).
+// A non-nil empty allowedCatIDs slice ([]uint64{}) means no categories are allowed.
+func IsCategoryAllowed(allowedCatIDs, hiddenCatIDs []uint64, categoryID uint64) bool {
+	if ContainsCategoryID(hiddenCatIDs, categoryID) {
+		return false
+	}
+	if allowedCatIDs != nil {
+		return ContainsCategoryID(allowedCatIDs, categoryID)
+	}
+	return true
+}
+
 // ParseCategoryIDsJSON parses a JSON string containing an array of category IDs (integers or numeric strings) into []uint64.
-// Returns nil if raw is empty, "null", "[]", or invalid.
+// Returns nil if raw is empty, "null", or invalid (meaning unrestricted).
+// Returns an empty non-nil slice ([]uint64{}) if raw is "[]" (meaning 0 categories allowed).
 func ParseCategoryIDsJSON(raw string) []uint64 {
 	trimmed := strings.TrimSpace(raw)
-	if trimmed == "" || trimmed == "null" || trimmed == "[]" {
+	if trimmed == "" || trimmed == "null" {
 		return nil
+	}
+	if trimmed == "[]" {
+		return []uint64{}
 	}
 	var rawItems []any
 	if err := json.Unmarshal([]byte(trimmed), &rawItems); err != nil {
 		return nil
 	}
 	if len(rawItems) == 0 {
-		return nil
+		return []uint64{}
 	}
 	ids := make([]uint64, 0, len(rawItems))
 	for _, item := range rawItems {

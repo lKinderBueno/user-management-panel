@@ -155,7 +155,16 @@ func (s *CustomerExpirySyncer) processCustomer(ctx context.Context, idx, total i
 		targetURL = xtreamPattern.CURL
 	}
 
-	info, err := s.xtreamClient.FetchUserInfo(ctx, targetURL, xtreamPattern.Param1, xtreamPattern.Param2)
+	userParam := xtreamPattern.Param1
+	if userParam == "" {
+		userParam = c.Username
+	}
+	passParam := xtreamPattern.Param2
+	if passParam == "" {
+		passParam = c.Password
+	}
+
+	info, err := s.xtreamClient.FetchUserInfo(ctx, targetURL, userParam, passParam)
 	if err != nil {
 		log.Printf("[SYNC-EXPIRY-WARN] [%d/%d] User %s (ID %d, List %d) Xtream error: %v\n", idx+1, total, c.Name, c.ID, c.ListID, err)
 		return
@@ -165,12 +174,15 @@ func (s *CustomerExpirySyncer) processCustomer(ctx context.Context, idx, total i
 		return
 	}
 
-	// Compare expiry timestamps (ignoring sub-second differences)
+	// Compare expiry timestamps (ignoring sub-second differences) and max_connections
 	var needsUpdate bool
 	if c.Expiry == nil {
 		needsUpdate = true
 	} else {
 		needsUpdate = c.Expiry.UTC().Truncate(time.Second).Unix() != info.Expiry.UTC().Truncate(time.Second).Unix()
+	}
+	if info.MaxConnections > 0 && c.MaxConnections > 0 && info.MaxConnections != c.MaxConnections {
+		needsUpdate = true
 	}
 
 	if needsUpdate {

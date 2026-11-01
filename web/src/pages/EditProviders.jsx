@@ -46,7 +46,19 @@ export default function EditProviders({ currentPlaylist, playlists = [], admin, 
 
   // Users data for the playlist
   const [users, setUsers] = React.useState([]);
-  const [selectedUserIds, setSelectedUserIds] = React.useState([]);
+  const [selectedUserIds, setSelectedUserIds] = React.useState(() => {
+    if (Array.isArray(location.state?.selectedUserIds) && location.state.selectedUserIds.length > 0) {
+      return location.state.selectedUserIds.map(Number).filter(Boolean);
+    }
+    const idsParam = searchParams.get('ids');
+    if (idsParam) {
+      return idsParam
+        .split(',')
+        .map((id) => parseInt(id.trim(), 10))
+        .filter((n) => !Number.isNaN(n) && n > 0);
+    }
+    return [];
+  });
   const [loadingUsers, setLoadingUsers] = React.useState(true);
 
   // Form states for Rename URL
@@ -395,7 +407,7 @@ export default function EditProviders({ currentPlaylist, playlists = [], admin, 
     setLoading(true);
     try {
       const res = await userApi.bulkUpdatePatterns(listId, payload);
-      setSuccessMsg(`Provider updates applied successfully to ${res?.updated_count || previewAffectedCount.users} user(s)!`);
+      setSuccessMsg(`Provider updates applied successfully to ${res?.affected_users ?? previewAffectedCount.users} user(s)!`);
       onProvidersUpdated?.(res);
       // Refresh user list
       const freshUsers = await userApi.getUsers(listId);
@@ -740,9 +752,12 @@ export default function EditProviders({ currentPlaylist, playlists = [], admin, 
                     className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-lg text-xs text-[#32325d] dark:text-slate-100 focus:outline-none focus:border-[#3970e1]"
                   >
                     <option value="all">All Types</option>
-                    <option value="xtream">Xtream Codes Only</option>
-                    <option value="stalker">Stalker Portal Only</option>
-                    <option value="m3u">M3U / Direct Stream Only</option>
+                    <option value="xtream">Xtream Codes</option>
+                    <option value="apollo">API Stream Auth</option>
+                    <option value="auth">Auth</option>
+                    <option value="watch">Watch</option>
+                    <option value="xui_mac">XUI MAC</option>
+                    <option value="token">Token</option>
                   </select>
                 </div>
 
@@ -777,14 +792,17 @@ export default function EditProviders({ currentPlaylist, playlists = [], admin, 
                     className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-lg text-xs text-[#32325d] dark:text-slate-100 focus:outline-none focus:border-[#3970e1]"
                   >
                     <option value="xtream">Xtream Codes</option>
-                    <option value="stalker">Stalker Portal</option>
-                    <option value="m3u">M3U / Direct Stream</option>
+                    <option value="apollo">API Stream Auth</option>
+                    <option value="auth">Auth</option>
+                    <option value="watch">Watch</option>
+                    <option value="xui_mac">XUI MAC</option>
+                    <option value="token">Token</option>
                   </select>
                 </div>
 
                 <div>
                   <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider mb-1">
-                    {newPatternConfig.urlLabel}
+                    Provider DNS / URL
                   </label>
                   <input
                     type="text"
@@ -796,31 +814,31 @@ export default function EditProviders({ currentPlaylist, playlists = [], admin, 
                 </div>
               </div>
 
-              {newPatternConfig.param1Label && (
+              {newPatternConfig.param1 && (
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
                   <div>
                     <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider mb-1">
-                      {newPatternConfig.param1Label}
+                      {newPatternConfig.param1}
                     </label>
                     <input
                       type="text"
                       value={newPatternParam1}
                       onChange={(e) => setNewPatternParam1(e.target.value)}
-                      placeholder={newPatternConfig.param1Help || 'Leave empty to inherit user value'}
+                      placeholder={`Enter ${newPatternConfig.param1} (or leave empty to inherit)`}
                       className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-lg text-xs font-mono text-[#32325d] dark:text-slate-100 focus:outline-none focus:border-[#3970e1]"
                     />
                   </div>
 
-                  {newPatternConfig.param2Label && (
+                  {newPatternConfig.param2 && (
                     <div>
                       <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider mb-1">
-                        {newPatternConfig.param2Label}
+                        {newPatternConfig.param2}
                       </label>
                       <input
                         type="text"
                         value={newPatternParam2}
                         onChange={(e) => setNewPatternParam2(e.target.value)}
-                        placeholder="Leave empty to inherit user value"
+                        placeholder={`Enter ${newPatternConfig.param2} (or leave empty to inherit)`}
                         className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded-lg text-xs font-mono text-[#32325d] dark:text-slate-100 focus:outline-none focus:border-[#3970e1]"
                       />
                     </div>

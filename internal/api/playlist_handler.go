@@ -183,6 +183,11 @@ func (h *PlaylistHandler) UpdatePlaylistSettings(w http.ResponseWriter, r *http.
 		return
 	}
 
+	if h.cache != nil && h.cache.IsAvailable() {
+		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:user:")
+		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:redirect:")
+	}
+
 	updated, err := h.playlistRepo.GetByIDForAdmin(r.Context(), listID, admin)
 	if err != nil || updated == nil {
 		writeJSON(w, http.StatusOK, map[string]string{"status": "updated"})
@@ -570,6 +575,7 @@ func (h *PlaylistHandler) UpdateWelcomeInfo(w http.ResponseWriter, r *http.Reque
 
 	if h.cache != nil && h.cache.IsAvailable() {
 		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:user:")
+		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:redirect:")
 		_ = h.cache.DeletePrefix(r.Context(), fmt.Sprintf("cache:cat:%d:", listID))
 	}
 
@@ -646,6 +652,7 @@ func (h *PlaylistHandler) UpdatePortalBranding(w http.ResponseWriter, r *http.Re
 
 	if h.cache != nil && h.cache.IsAvailable() {
 		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:user:")
+		_ = h.cache.DeletePrefix(r.Context(), "cache:auth:redirect:")
 	}
 
 	writeJSON(w, http.StatusOK, map[string]interface{}{
@@ -767,6 +774,7 @@ func (h *PlaylistHandler) ImportFromEditor(w http.ResponseWriter, r *http.Reques
 
 	if h.cache != nil && h.cache.IsAvailable() {
 		_ = h.cache.DeletePrefix(ctx, "cache:auth:user:")
+		_ = h.cache.DeletePrefix(ctx, "cache:auth:redirect:")
 		_ = h.cache.DeletePrefix(ctx, fmt.Sprintf("cache:cat:%d:", listID))
 	}
 

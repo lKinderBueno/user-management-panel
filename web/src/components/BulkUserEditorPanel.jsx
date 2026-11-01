@@ -51,6 +51,9 @@ export default function BulkUserEditorPanel({
   const [noteMode, setNoteMode] = React.useState('append'); // 'append' | 'replace'
   const [bulkNote, setBulkNote] = React.useState('');
 
+  const [enableMessage, setEnableMessage] = React.useState(false);
+  const [bulkMessage, setBulkMessage] = React.useState('');
+
   const [enableStatus, setEnableStatus] = React.useState(false);
   const [bulkIsSuspended, setBulkIsSuspended] = React.useState(false);
   const [bulkReason, setBulkReason] = React.useState('');
@@ -65,7 +68,7 @@ export default function BulkUserEditorPanel({
     return () => window.removeEventListener('keydown', handleKeyDown);
   }, [isDrawer, onClose]);
 
-  const hasAnyChangeEnabled = enableExpiry || enableSyncExpiry || enableMaxConnections || enableNote || enableStatus;
+  const hasAnyChangeEnabled = enableExpiry || enableSyncExpiry || enableMaxConnections || enableNote || enableMessage || enableStatus;
 
   // Compute active changes summary
   const activeChangesList = React.useMemo(() => {
@@ -85,11 +88,14 @@ export default function BulkUserEditorPanel({
     if (enableNote) {
       list.push(`Internal Notes → ${noteMode === 'append' ? 'Append text' : 'Replace text'}`);
     }
+    if (enableMessage) {
+      list.push(`User Portal Notice → ${bulkMessage.trim() ? 'Set message' : 'Clear message'}`);
+    }
     if (enableStatus) {
       list.push(`Account Status → ${bulkIsSuspended ? 'Suspended' : 'Active'}`);
     }
     return list;
-  }, [enableExpiry, bulkExpiry, enableSyncExpiry, bulkSyncExpiry, enableMaxConnections, bulkMaxConnections, enableNote, noteMode, enableStatus, bulkIsSuspended]);
+  }, [enableExpiry, bulkExpiry, enableSyncExpiry, bulkSyncExpiry, enableMaxConnections, bulkMaxConnections, enableNote, noteMode, enableMessage, bulkMessage, enableStatus, bulkIsSuspended]);
 
   const handleApply = () => {
     if (!hasAnyChangeEnabled) return;
@@ -104,6 +110,8 @@ export default function BulkUserEditorPanel({
       enableNote,
       noteMode,
       note: bulkNote,
+      enableMessage,
+      message: bulkMessage,
       enableStatus,
       is_suspended: bulkIsSuspended,
       reason: bulkReason
@@ -476,6 +484,45 @@ export default function BulkUserEditorPanel({
         ) : (
           <p className="text-[13px] text-[#8898aa] dark:text-slate-400 pl-6">
             Existing internal notes will remain untouched.
+          </p>
+        )}
+      </div>
+
+      {/* Section 4b: User Portal Notice / Welcome Message */}
+      <div className={`p-3.5 rounded-lg border transition-all ${enableMessage ? 'bg-white dark:bg-slate-900 border-[#3970e1] shadow-xs' : 'bg-[#fcfdfe] dark:bg-slate-800/50 border-[#e9ecef] dark:border-slate-800'
+        }`}>
+        <div className="flex items-center justify-between mb-1">
+          <label className="flex items-center gap-2 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={enableMessage}
+              onChange={(e) => setEnableMessage(e.target.checked)}
+              className="w-4 h-4 rounded border-[#dee2e6] dark:border-slate-700 dark:bg-slate-800 text-[#3970e1] focus:ring-0 cursor-pointer"
+            />
+            <span className="text-xs font-bold text-[#32325d] dark:text-slate-100 uppercase tracking-wider flex items-center gap-1.5">
+              <FileText className="w-3.5 h-3.5 text-[#3970e1]" />
+              Update User Portal Notice
+            </span>
+          </label>
+          <span className={`text-[12px] font-semibold px-2 py-0.5 rounded ${enableMessage ? 'bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400' : 'bg-[#f6f9fc] dark:bg-slate-800 text-[#8898aa] dark:text-slate-400'
+            }`}>
+            {enableMessage ? 'Active' : 'Unchanged'}
+          </span>
+        </div>
+
+        {enableMessage ? (
+          <div className="mt-2.5 pl-6 space-y-2 animate-in fade-in duration-150">
+            <input
+              type="text"
+              value={bulkMessage}
+              onChange={(e) => setBulkMessage(e.target.value)}
+              placeholder="Notice message for selected users (leave blank to clear)..."
+              className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs text-[#32325d] dark:text-slate-100 placeholder-[#adb5bd] dark:placeholder-slate-500 focus:outline-none focus:border-[#3970e1] focus:ring-1 focus:ring-[#3970e1]/30 transition shadow-xs"
+            />
+          </div>
+        ) : (
+          <p className="text-[13px] text-[#8898aa] dark:text-slate-400 pl-6">
+            Existing user portal notice messages will remain untouched.
           </p>
         )}
       </div>
