@@ -1530,6 +1530,7 @@ export default function ResellerDashboard({
                 <UserEditorPanel
                   user={activeUser}
                   onUserChange={setActiveUser}
+                  users={users}
                   categories={categories}
                   playlists={playlists}
                   currentPlaylist={currentPlaylist}
@@ -1616,6 +1617,7 @@ export default function ResellerDashboard({
               <UserEditorPanel
                 user={activeUser}
                 onUserChange={setActiveUser}
+                users={users}
                 categories={categories}
                 playlists={playlists}
                 currentPlaylist={currentPlaylist}
@@ -1677,6 +1679,7 @@ export default function ResellerDashboard({
                   <UserEditorPanel
                     user={activeUser}
                     onUserChange={setActiveUser}
+                    users={users}
                     categories={categories}
                     playlists={playlists}
                     currentPlaylist={currentPlaylist}

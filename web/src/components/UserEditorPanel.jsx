@@ -15,18 +15,22 @@ import {
   Lock,
   Unlock,
   ShieldAlert,
-  EyeOff
+  EyeOff,
+  Check
 } from 'lucide-react';
 import CalendarPicker from './CalendarPicker';
 import MultiCategorySelect from './MultiCategorySelect';
 import ProviderEditor from './ProviderEditor';
 import { Drawer } from './ui';
 import UserHiddenCategoriesModal from './UserHiddenCategoriesModal';
+import SearchableUserSelect from './SearchableUserSelect';
+import { userApi } from '../api/client';
 import { safeParsePatterns, getEffectiveUserPatterns, getPatternKey } from '../utils/patterns';
 
 export default function UserEditorPanel({
   user,
   onUserChange,
+  users = [],
   categories = { channels: [], vods: [], series: [] },
   playlists = [],
   currentPlaylist = null,
@@ -52,6 +56,58 @@ export default function UserEditorPanel({
   }, [isDrawer, onClose]);
 
   const [showHiddenCategoriesModal, setShowHiddenCategoriesModal] = React.useState(false);
+  const [templateUserId, setTemplateUserId] = React.useState('');
+  const [fetchedUsers, setFetchedUsers] = React.useState([]);
+
+  // Fetch users if not provided via props
+  React.useEffect(() => {
+    if (users && users.length > 0) return;
+    const plId = user?.list_id || currentPlaylist?.id;
+    if (!plId) return;
+
+    let isMounted = true;
+    userApi.getUsers(plId).then((data) => {
+      if (isMounted && Array.isArray(data)) {
+        setFetchedUsers(data);
+      }
+    }).catch(() => {});
+
+    return () => {
+      isMounted = false;
+    };
+  }, [users, user?.list_id, currentPlaylist?.id]);
+
+  const effectiveUsers = React.useMemo(() => {
+    if (users && users.length > 0) return users;
+    return fetchedUsers;
+  }, [users, fetchedUsers]);
+
+  const availableTemplateUsers = React.useMemo(() => {
+    return (effectiveUsers || []).filter((u) => u && String(u.id) !== String(user?.id));
+  }, [effectiveUsers, user?.id]);
+
+  // Reset template selection when active user changes
+  React.useEffect(() => {
+    setTemplateUserId('');
+  }, [user?.id]);
+
+  const handleSelectTemplateUser = React.useCallback(
+    (uId, templateUser) => {
+      setTemplateUserId(uId);
+      if (!uId) return;
+
+      const template = templateUser || (effectiveUsers || []).find((u) => String(u.id) === String(uId));
+      if (template) {
+        onUserChange({
+          ...user,
+          channels_categories: template.channels_categories,
+          vods_categories: template.vods_categories,
+          series_categories: template.series_categories,
+        });
+      }
+    },
+    [user, effectiveUsers, onUserChange]
+  );
 
   const hiddenCategoriesCount = React.useMemo(() => {
     if (!user || !user.user_settings) return 0;
@@ -210,10 +266,42 @@ export default function UserEditorPanel({
       </div>
 
       {/* Categories */}
-      <div className="pt-3 border-t border-[#e9ecef] dark:border-slate-800 space-y-2">
+      <div className="pt-3 border-t border-[#e9ecef] dark:border-slate-800 space-y-2.5">
         <span className="text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider block">
           Category Access
         </span>
+
+        {/* Template user loader (shown when other users are available in this playlist) */}
+        {availableTemplateUsers.length > 0 && (
+          <div className="p-3 bg-[#f8f9fe] dark:bg-slate-800/60 border border-[#dee2e6] dark:border-slate-700 rounded-lg relative z-20 space-y-1.5">
+            <div className="flex items-center justify-between">
+              <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider flex items-center gap-1.5">
+                <Users className="w-3.5 h-3.5 text-[#3970e1] dark:text-blue-400" />
+                <span>Use an Existing User as Template</span>
+              </label>
+              {templateUserId && (
+                <span className="text-[11px] text-[#2dce89] dark:text-emerald-400 font-medium flex items-center gap-1">
+                  <Check className="w-3.5 h-3.5" />
+                  Template applied
+                </span>
+              )}
+            </div>
+            <SearchableUserSelect
+              users={effectiveUsers}
+              excludeUserIds={user?.id ? [user.id] : []}
+              value={templateUserId}
+              onChange={handleSelectTemplateUser}
+              placeholder="-- Select a template user to copy categories --"
+            />
+            {templateUserId && (
+              <p className="text-[11px] text-[#2dce89] dark:text-emerald-400 font-medium flex items-center gap-1 pt-0.5">
+                <Check className="w-3.5 h-3.5" />
+                Categories loaded from template user. You can further adjust them below.
+              </p>
+            )}
+          </div>
+        )}
+
         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <MultiCategorySelect
             title="Live Channels"

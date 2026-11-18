@@ -35,7 +35,7 @@ func NewRemoteSyncerClient(baseURL string, timeout ...time.Duration) *RemoteSync
 }
 
 // StartAsyncSync triggers a playlist sync on the remote syncer daemon.
-func (c *RemoteSyncerClient) StartAsyncSync(playlistID uint64, force bool) (string, error) {
+func (c *RemoteSyncerClient) StartAsyncSync(playlistID uint64, force bool, syncTypes ...string) (string, error) {
 	if c.baseURL == "" {
 		return "", fmt.Errorf("remote syncer URL is not configured")
 	}
@@ -43,6 +43,9 @@ func (c *RemoteSyncerClient) StartAsyncSync(playlistID uint64, force bool) (stri
 	payload := map[string]interface{}{
 		"playlist_id": playlistID,
 		"force":       force,
+	}
+	if len(syncTypes) > 0 && strings.TrimSpace(syncTypes[0]) != "" {
+		payload["type"] = strings.TrimSpace(syncTypes[0])
 	}
 	body, err := json.Marshal(payload)
 	if err != nil {
@@ -54,6 +57,18 @@ func (c *RemoteSyncerClient) StartAsyncSync(playlistID uint64, force bool) (stri
 		return "", fmt.Errorf("remote syncer connection failed: %w", err)
 	}
 	defer resp.Body.Close()
+
+	if resp.StatusCode == http.StatusBadRequest {
+		var badReqResp struct {
+			Error   string `json:"error"`
+			Message string `json:"message"`
+		}
+		_ = json.NewDecoder(resp.Body).Decode(&badReqResp)
+		if badReqResp.Message != "" {
+			return "", fmt.Errorf("%s", badReqResp.Message)
+		}
+		return "", fmt.Errorf("remote syncer rejected request: bad request")
+	}
 
 	if resp.StatusCode == http.StatusConflict {
 		var conflictResp struct {

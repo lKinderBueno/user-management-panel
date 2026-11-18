@@ -31,7 +31,9 @@ func (r *PlaylistRepo) DB() *sql.DB {
 func (r *PlaylistRepo) EnsureSchema(ctx context.Context) error {
 	queries := []string{
 		`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS portal_branding MEDIUMTEXT NULL`,
+		`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS aed_config LONGTEXT NULL`,
 		`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS enforce_cname TINYINT(1) NOT NULL DEFAULT 0`,
+		`UPDATE playlists SET cname = NULL WHERE LOWER(TRIM(cname)) IN ('undefined', 'null', 'none', '{cname}', '')`,
 	}
 	for _, q := range queries {
 		_, _ = r.db.ExecContext(ctx, q)
@@ -82,6 +84,7 @@ func (r *PlaylistRepo) GetAll(ctx context.Context) ([]models.Playlist, error) {
 			COALESCE(p.max_connections, 1) as max_connections,
 			COALESCE(p.tracking_timeout_minutes, 10) as tracking_timeout_minutes,
 			COALESCE(p.welcome_info, '{}') as welcome_info,
+			COALESCE(p.aed_config, '') as aed_config,
 			COALESCE(p.portal_branding, '{}') as portal_branding,
 			COALESCE(p.cname, '') as cname,
 			COALESCE(p.enforce_cname, 0) as enforce_cname,
@@ -103,7 +106,7 @@ func (r *PlaylistRepo) GetAll(ctx context.Context) ([]models.Playlist, error) {
 	var playlists []models.Playlist
 	for rows.Next() {
 		var p models.Playlist
-		var patternsStr, welcomeInfoStr, portalBrandingStr, cnameStr string
+		var patternsStr, welcomeInfoStr, aedConfigStr, portalBrandingStr, cnameStr string
 		var syncedAt, lastChan, lastMov, lastSer, orphanedAt sql.NullTime
 		var isOrphaned, allowTracking, limitMaxConn, maxConn, trackingTimeout, enforceCname, cnameSSL int
 		err := rows.Scan(
@@ -127,6 +130,7 @@ func (r *PlaylistRepo) GetAll(ctx context.Context) ([]models.Playlist, error) {
 			&maxConn,
 			&trackingTimeout,
 			&welcomeInfoStr,
+			&aedConfigStr,
 			&portalBrandingStr,
 			&cnameStr,
 			&enforceCname,
@@ -138,6 +142,9 @@ func (r *PlaylistRepo) GetAll(ctx context.Context) ([]models.Playlist, error) {
 		p.Patterns = []byte(patternsStr)
 		if welcomeInfoStr != "" && welcomeInfoStr != "{}" && welcomeInfoStr != "null" {
 			p.WelcomeInfo = []byte(welcomeInfoStr)
+		}
+		if aedConfigStr != "" && aedConfigStr != "{}" && aedConfigStr != "null" {
+			p.AedConfig = []byte(aedConfigStr)
 		}
 		if portalBrandingStr != "" && portalBrandingStr != "{}" && portalBrandingStr != "null" {
 			p.PortalBranding = []byte(portalBrandingStr)
@@ -223,6 +230,7 @@ func (r *PlaylistRepo) GetForAdmin(ctx context.Context, admin *models.Admin) ([]
 			COALESCE(p.max_connections, 1) as max_connections,
 			COALESCE(p.tracking_timeout_minutes, 10) as tracking_timeout_minutes,
 			COALESCE(p.welcome_info, '{}') as welcome_info,
+			COALESCE(p.aed_config, '') as aed_config,
 			COALESCE(p.portal_branding, '{}') as portal_branding,
 			COALESCE(p.cname, '') as cname,
 			COALESCE(p.enforce_cname, 0) as enforce_cname,
@@ -242,7 +250,7 @@ func (r *PlaylistRepo) GetForAdmin(ctx context.Context, admin *models.Admin) ([]
 	var playlists []models.Playlist
 	for rows.Next() {
 		var p models.Playlist
-		var patternsStr, welcomeInfoStr, portalBrandingStr, cnameStr string
+		var patternsStr, welcomeInfoStr, aedConfigStr, portalBrandingStr, cnameStr string
 		var syncedAt, lastChan, lastMov, lastSer, orphanedAt sql.NullTime
 		var isOrphaned, allowTracking, limitMaxConn, maxConn, trackingTimeout, enforceCname, cnameSSL int
 		err := rows.Scan(
@@ -266,6 +274,7 @@ func (r *PlaylistRepo) GetForAdmin(ctx context.Context, admin *models.Admin) ([]
 			&maxConn,
 			&trackingTimeout,
 			&welcomeInfoStr,
+			&aedConfigStr,
 			&portalBrandingStr,
 			&cnameStr,
 			&enforceCname,
@@ -277,6 +286,9 @@ func (r *PlaylistRepo) GetForAdmin(ctx context.Context, admin *models.Admin) ([]
 		p.Patterns = []byte(patternsStr)
 		if welcomeInfoStr != "" && welcomeInfoStr != "{}" && welcomeInfoStr != "null" {
 			p.WelcomeInfo = []byte(welcomeInfoStr)
+		}
+		if aedConfigStr != "" && aedConfigStr != "{}" && aedConfigStr != "null" {
+			p.AedConfig = []byte(aedConfigStr)
 		}
 		if portalBrandingStr != "" && portalBrandingStr != "{}" && portalBrandingStr != "null" {
 			p.PortalBranding = []byte(portalBrandingStr)
@@ -345,6 +357,7 @@ func (r *PlaylistRepo) GetByIDForAdmin(ctx context.Context, listID uint64, admin
 			COALESCE(p.max_connections, 1) as max_connections,
 			COALESCE(p.tracking_timeout_minutes, 10) as tracking_timeout_minutes,
 			COALESCE(p.welcome_info, '{}') as welcome_info,
+			COALESCE(p.aed_config, '') as aed_config,
 			COALESCE(p.portal_branding, '{}') as portal_branding,
 			COALESCE(p.cname, '') as cname,
 			COALESCE(p.enforce_cname, 0) as enforce_cname,
@@ -357,7 +370,7 @@ func (r *PlaylistRepo) GetByIDForAdmin(ctx context.Context, listID uint64, admin
 	row := r.db.QueryRowContext(ctx, query, args...)
 
 	var p models.Playlist
-	var patternsStr, welcomeInfoStr, portalBrandingStr, cnameStr string
+	var patternsStr, welcomeInfoStr, aedConfigStr, portalBrandingStr, cnameStr string
 	var syncedAt, lastChan, lastMov, lastSer, orphanedAt sql.NullTime
 	var isOrphaned, allowTracking, limitMaxConn, maxConn, trackingTimeout, enforceCname, cnameSSL int
 	err := row.Scan(
@@ -381,6 +394,7 @@ func (r *PlaylistRepo) GetByIDForAdmin(ctx context.Context, listID uint64, admin
 		&maxConn,
 		&trackingTimeout,
 		&welcomeInfoStr,
+		&aedConfigStr,
 		&portalBrandingStr,
 		&cnameStr,
 		&enforceCname,
@@ -395,6 +409,9 @@ func (r *PlaylistRepo) GetByIDForAdmin(ctx context.Context, listID uint64, admin
 	p.Patterns = []byte(patternsStr)
 	if welcomeInfoStr != "" && welcomeInfoStr != "{}" && welcomeInfoStr != "null" {
 		p.WelcomeInfo = []byte(welcomeInfoStr)
+	}
+	if aedConfigStr != "" && aedConfigStr != "{}" && aedConfigStr != "null" {
+		p.AedConfig = []byte(aedConfigStr)
 	}
 	if portalBrandingStr != "" && portalBrandingStr != "{}" && portalBrandingStr != "null" {
 		p.PortalBranding = []byte(portalBrandingStr)
@@ -448,6 +465,7 @@ func (r *PlaylistRepo) GetByID(ctx context.Context, listID uint64) (*models.Play
 			COALESCE(p.max_connections, 1) as max_connections,
 			COALESCE(p.tracking_timeout_minutes, 10) as tracking_timeout_minutes,
 			COALESCE(p.welcome_info, '{}') as welcome_info,
+			COALESCE(p.aed_config, '') as aed_config,
 			COALESCE(p.portal_branding, '{}') as portal_branding,
 			COALESCE(p.cname, '') as cname,
 			COALESCE(p.enforce_cname, 0) as enforce_cname,
@@ -459,7 +477,7 @@ func (r *PlaylistRepo) GetByID(ctx context.Context, listID uint64) (*models.Play
 	row := r.db.QueryRowContext(ctx, query, listID)
 
 	var p models.Playlist
-	var patternsStr, welcomeInfoStr, portalBrandingStr, cnameStr string
+	var patternsStr, welcomeInfoStr, aedConfigStr, portalBrandingStr, cnameStr string
 	var syncedAt, lastChan, lastMov, lastSer, orphanedAt sql.NullTime
 	var isOrphaned, allowTracking, limitMaxConn, maxConn, trackingTimeout, enforceCname, cnameSSL int
 	err := row.Scan(
@@ -483,6 +501,7 @@ func (r *PlaylistRepo) GetByID(ctx context.Context, listID uint64) (*models.Play
 		&maxConn,
 		&trackingTimeout,
 		&welcomeInfoStr,
+		&aedConfigStr,
 		&portalBrandingStr,
 		&cnameStr,
 		&enforceCname,
@@ -497,6 +516,9 @@ func (r *PlaylistRepo) GetByID(ctx context.Context, listID uint64) (*models.Play
 	p.Patterns = []byte(patternsStr)
 	if welcomeInfoStr != "" && welcomeInfoStr != "{}" && welcomeInfoStr != "null" {
 		p.WelcomeInfo = []byte(welcomeInfoStr)
+	}
+	if aedConfigStr != "" && aedConfigStr != "{}" && aedConfigStr != "null" {
+		p.AedConfig = []byte(aedConfigStr)
 	}
 	if portalBrandingStr != "" && portalBrandingStr != "{}" && portalBrandingStr != "null" {
 		p.PortalBranding = []byte(portalBrandingStr)

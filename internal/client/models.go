@@ -166,6 +166,7 @@ type Playlist struct {
 	TimeShift            FlexibleFloat64 `json:"time_shift"`
 	Patterns             json.RawMessage `json:"patterns"`
 	WelcomeInfo          json.RawMessage `json:"welcome_info"`
+	AedConfig            json.RawMessage `json:"aed_config,omitempty"`
 	Cname                *string         `json:"cname"`
 	Expiry               FlexibleTime    `json:"expiry"`
 	Logo                 *string         `json:"logo"`

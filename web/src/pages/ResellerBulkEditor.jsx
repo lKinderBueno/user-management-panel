@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { playlistApi, userApi } from '../api/client';
 import MultiCategorySelect from '../components/MultiCategorySelect';
+import SearchableUserSelect from '../components/SearchableUserSelect';
 import { PageHeader } from '../components/ui';
 
 export default function ResellerBulkEditor({ currentPlaylist, onUsersUpdated }) {
@@ -444,24 +445,45 @@ export default function ResellerBulkEditor({ currentPlaylist, onUsersUpdated }) 
 
           {/* 4. Copy From Template User (when mode === 'copy') */}
           {mode === 'copy' && (
-            <div className="space-y-2 pt-2 border-t border-[#e9ecef] dark:border-slate-800">
+            <div className="space-y-2 pt-2 border-t border-[#e9ecef] dark:border-slate-800 relative z-20">
               <label className="text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider block">
                 Select Source User
               </label>
-              <select
+              <SearchableUserSelect
+                users={customers}
+                excludeUserIds={selectedCustomers}
                 value={customerToCopy}
-                onChange={(e) => setCustomerToCopy(e.target.value)}
-                className="w-full px-3 py-2 bg-white dark:bg-slate-900 border border-[#dee2e6] dark:border-slate-700 rounded text-xs text-[#32325d] dark:text-slate-100 focus:outline-none focus:border-[#3970e1] shadow-sm"
-              >
-                <option value="">-- Choose a template user to copy from --</option>
-                {customers
-                  .filter((u) => !selectedCustomers.includes(u.id))
-                  .map((u) => (
-                    <option key={u.id} value={u.id}>
-                      #{u.id} {u.name || u.username} {u.name && u.username ? `(${u.username})` : ''}
-                    </option>
-                  ))}
-              </select>
+                onChange={(val) => setCustomerToCopy(val)}
+                placeholder="-- Choose a template user to copy from --"
+              />
+
+              {customerToCopy && (
+                (() => {
+                  const template = customers.find((u) => String(u.id) === String(customerToCopy));
+                  if (!template) return null;
+                  const chanCount = template.channels_categories === null ? 'All' : template.channels_categories?.length || 0;
+                  const vodCount = template.vods_categories === null ? 'All' : template.vods_categories?.length || 0;
+                  const seriesCount = template.series_categories === null ? 'All' : template.series_categories?.length || 0;
+                  return (
+                    <div className="p-2.5 bg-[#f8f9fe] dark:bg-slate-800/60 border border-[#dee2e6] dark:border-slate-700 rounded-lg flex flex-wrap items-center justify-between gap-2 text-xs">
+                      <div className="flex items-center gap-1.5 text-[#525f7f] dark:text-slate-300 font-medium">
+                        <span>Source template categories:</span>
+                      </div>
+                      <div className="flex items-center gap-2">
+                        <span className="px-2 py-0.5 rounded bg-[#eef2ff] dark:bg-blue-950/60 text-[#3970e1] dark:text-blue-400 font-semibold border border-[#3970e1]/20 dark:border-blue-800/40 text-[11px]">
+                          Live: {chanCount}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-emerald-50 dark:bg-emerald-950/60 text-[#2dce89] dark:text-emerald-400 font-semibold border border-emerald-500/20 text-[11px]">
+                          VOD: {vodCount}
+                        </span>
+                        <span className="px-2 py-0.5 rounded bg-purple-50 dark:bg-purple-950/60 text-purple-600 dark:text-purple-400 font-semibold border border-purple-500/20 text-[11px]">
+                          Series: {seriesCount}
+                        </span>
+                      </div>
+                    </div>
+                  );
+                })()
+              )}
             </div>
           )}
         </div>

@@ -521,18 +521,19 @@ export default function UserPortal() {
   }, [userInfo]);
 
   // Domain and host resolution
-  const rawCname = (userInfo?.cname || '').trim();
+  const candidateUserCname = (userInfo?.cname && userInfo.cname !== 'undefined' && userInfo.cname !== 'null') ? userInfo.cname : '';
+  const rawCname = (candidateUserCname || '').trim();
   const primaryDomain = rawCname.split(/[\s,;]+/)[0] || '';
   const cnameClean = primaryDomain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-  const hasCname = cnameClean.length > 0;
+  const hasCname = cnameClean.length > 0 && cnameClean !== 'undefined' && cnameClean !== 'null';
   const isCnameSSL = Boolean(userInfo?.cname_ssl || rawCname.startsWith('https://'));
 
   const protocolHost = React.useMemo(() => {
     return resolveProtocolHost({
-      cname: userInfo?.cname,
+      cname: candidateUserCname,
       cnameSSL: userInfo?.cname_ssl,
     });
-  }, [userInfo?.cname, userInfo?.cname_ssl]);
+  }, [candidateUserCname, userInfo?.cname_ssl]);
 
   // Query parameters for customized M3U / EPG
   const m3uQueryParams = React.useMemo(() => {
@@ -561,7 +562,7 @@ export default function UserPortal() {
   const shortEpgUrl = userInfo?.epg ? `${protocolHost}/${userInfo.epg}${epgQueryParams.length > 0 ? `?${epgQueryParams.join('&')}` : ''}` : null;
 
   // STB / Web Streaming Player URL resolution (stb.<hostname> or error if IP / locked)
-  const effectiveCname = userInfo?.cname || '';
+  const effectiveCname = candidateUserCname || '';
   const effectiveCnameSSL = Boolean(userInfo?.cname_ssl || isCnameSSL);
 
   const webPlayerResolution = React.useMemo(() => {

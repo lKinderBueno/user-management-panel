@@ -82,6 +82,23 @@
               "default": false,
               "example": false
             }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Optional content type to refresh exclusively ('live', 'vod', 'series', 'epg', or 'all')",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "live",
+                "vod",
+                "series",
+                "epg"
+              ],
+              "example": "live"
+            }
           }
         ],
         "requestBody": {
@@ -167,6 +184,23 @@
               "type": "boolean",
               "default": false,
               "example": false
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Optional content type to refresh exclusively ('live', 'vod', 'series', 'epg', or 'all')",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "live",
+                "vod",
+                "series",
+                "epg"
+              ],
+              "example": "live"
             }
           }
         ],
@@ -334,6 +368,23 @@
               "default": false,
               "example": false
             }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Optional content type to refresh exclusively ('live', 'vod', 'series', 'epg', or 'all')",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "live",
+                "vod",
+                "series",
+                "epg"
+              ],
+              "example": "live"
+            }
           }
         ],
         "requestBody": {
@@ -408,6 +459,23 @@
               "type": "boolean",
               "default": false,
               "example": false
+            }
+          },
+          {
+            "name": "type",
+            "in": "query",
+            "required": false,
+            "description": "Optional content type to refresh exclusively ('live', 'vod', 'series', 'epg', or 'all')",
+            "schema": {
+              "type": "string",
+              "enum": [
+                "all",
+                "live",
+                "vod",
+                "series",
+                "epg"
+              ],
+              "example": "live"
             }
           }
         ],
@@ -1984,8 +2052,20 @@
           "force": {
             "type": "boolean",
             "description": "Force complete re-sync of all streams and categories",
-            "default": true,
+            "default": false,
             "example": true
+          },
+          "type": {
+            "type": "string",
+            "description": "Optional content type to refresh exclusively ('live', 'vod', 'series', 'epg', or 'all')",
+            "enum": [
+              "all",
+              "live",
+              "vod",
+              "series",
+              "epg"
+            ],
+            "example": "live"
           }
         }
       },
@@ -2008,6 +2088,11 @@
           "playlist_name": {
             "type": "string",
             "example": "Main Sports & Movies"
+          },
+          "sync_type": {
+            "type": "string",
+            "description": "Content type currently synchronized ('live', 'vod', 'series', 'epg', or empty for all)",
+            "example": "live"
           },
           "status": {
             "type": "string",

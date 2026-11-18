@@ -9,6 +9,12 @@ import (
 	"strings"
 )
 
+func isInvalidHost(h string) bool {
+	h = strings.TrimSpace(strings.ToLower(h))
+	h = strings.TrimRight(h, ".")
+	return h == "" || h == "undefined" || h == "null" || h == "none" || h == "{cname}"
+}
+
 // NormalizeHost normalizes a hostname, URL, or host:port string into a clean, lowercased host.
 // It removes any scheme (http://, https://), URL path, port numbers, trailing slashes, and dots.
 func NormalizeHost(raw string) string {
@@ -38,6 +44,9 @@ func NormalizeHost(raw string) string {
 
 	raw = strings.TrimSpace(strings.ToLower(raw))
 	raw = strings.TrimRight(raw, ".")
+	if isInvalidHost(raw) {
+		return ""
+	}
 	return raw
 }
 
@@ -119,6 +128,9 @@ func NormalizeCnameEntry(raw string) string {
 		host = strings.TrimSpace(strings.ToLower(host))
 		host = strings.TrimRight(host, ".")
 		port = strings.TrimSpace(port)
+		if isInvalidHost(host) {
+			return ""
+		}
 		if host != "" && port != "" {
 			return host + ":" + port
 		}
@@ -128,6 +140,9 @@ func NormalizeCnameEntry(raw string) string {
 		host := strings.TrimSpace(strings.ToLower(parts[0]))
 		host = strings.TrimRight(host, ".")
 		port := strings.TrimSpace(parts[1])
+		if isInvalidHost(host) {
+			return ""
+		}
 		if host != "" && port != "" {
 			return host + ":" + port
 		}
@@ -136,6 +151,9 @@ func NormalizeCnameEntry(raw string) string {
 
 	raw = strings.TrimSpace(strings.ToLower(raw))
 	raw = strings.TrimRight(raw, ".")
+	if isInvalidHost(raw) {
+		return ""
+	}
 	return raw
 }
 
@@ -179,8 +197,13 @@ func CleanBaseHost(host string) string {
 	clean := NormalizeHost(host)
 	for _, prefix := range []string{"stb.", "player.", "web."} {
 		if strings.HasPrefix(clean, prefix) {
-			return strings.TrimPrefix(clean, prefix)
+			clean = strings.TrimPrefix(clean, prefix)
+			break
 		}
+	}
+	clean = strings.TrimSpace(clean)
+	if isInvalidHost(clean) {
+		return ""
 	}
 	return clean
 }

@@ -85,23 +85,35 @@ export const playlistApi = {
   getPlaylists: () => apiFetch('/playlists'),
   getPlaylist: (listId) => apiFetch(`/playlists/${listId}`),
   getCategories: (listId) => apiFetch(`/playlists/${listId}/categories`),
-  refreshPlaylist: (listId, force = false) => {
+  refreshPlaylist: (listId, force = false, syncType = '') => {
     try {
       window.dispatchEvent(new CustomEvent('sync-started'));
     } catch {}
-    return apiFetch(`/playlists/${listId}/refresh?force=${force}`, { method: 'POST' });
+    const params = new URLSearchParams();
+    if (force) params.set('force', 'true');
+    if (syncType) params.set('type', syncType);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return apiFetch(`/playlists/${listId}/refresh${qs}`, { method: 'POST' });
   },
-  startSync: (listId, force = false) => {
+  startSync: (listId, force = false, syncType = '') => {
     try {
       window.dispatchEvent(new CustomEvent('sync-started'));
     } catch {}
-    return apiFetch(`/playlists/${listId}/sync?force=${force}`, { method: 'POST' });
+    const params = new URLSearchParams();
+    if (force) params.set('force', 'true');
+    if (syncType) params.set('type', syncType);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return apiFetch(`/playlists/${listId}/sync${qs}`, { method: 'POST' });
   },
-  startAllSync: (force = false) => {
+  startAllSync: (force = false, syncType = '') => {
     try {
       window.dispatchEvent(new CustomEvent('sync-started'));
     } catch {}
-    return apiFetch(`/playlists/sync?force=${force}`, { method: 'POST' });
+    const params = new URLSearchParams();
+    if (force) params.set('force', 'true');
+    if (syncType) params.set('type', syncType);
+    const qs = params.toString() ? `?${params.toString()}` : '';
+    return apiFetch(`/playlists/sync${qs}`, { method: 'POST' });
   },
   getSyncStatus: () => apiFetch('/playlists/sync/status'),
   getSyncLogs: (listId, includeGlobal = true) => 

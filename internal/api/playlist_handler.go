@@ -225,7 +225,9 @@ func (h *PlaylistHandler) GetCategories(w http.ResponseWriter, r *http.Request) 
 }
 
 type SyncRequest struct {
-	Force *bool `json:"force,omitempty"`
+	Force    *bool   `json:"force,omitempty"`
+	Type     *string `json:"type,omitempty"`
+	SyncType *string `json:"sync_type,omitempty"`
 }
 
 func (h *PlaylistHandler) StartPlaylistSync(w http.ResponseWriter, r *http.Request) {
@@ -254,14 +256,35 @@ func (h *PlaylistHandler) StartPlaylistSync(w http.ResponseWriter, r *http.Reque
 	if fStr := r.URL.Query().Get("force"); fStr != "" {
 		force = fStr == "true" || fStr == "1"
 	}
+	syncType := strings.TrimSpace(r.URL.Query().Get("type"))
+	if syncType == "" {
+		syncType = strings.TrimSpace(r.URL.Query().Get("sync_type"))
+	}
 	var req SyncRequest
 	if r.Body != nil && r.ContentLength > 0 {
-		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.Force != nil {
-			force = *req.Force
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			if req.Force != nil {
+				force = *req.Force
+			}
+			if req.Type != nil && strings.TrimSpace(*req.Type) != "" {
+				syncType = strings.TrimSpace(*req.Type)
+			} else if req.SyncType != nil && strings.TrimSpace(*req.SyncType) != "" {
+				syncType = strings.TrimSpace(*req.SyncType)
+			}
 		}
 	}
 
-	jobID, err := h.syncer.StartAsyncSync(listID, force)
+	if syncType != "" {
+		if _, err := models.ParseSyncTypes(syncType); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error":   "invalid_sync_type",
+				"message": err.Error(),
+			})
+			return
+		}
+	}
+
+	jobID, err := h.syncer.StartAsyncSync(listID, force, syncType)
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error":   "sync_in_progress",
@@ -271,13 +294,17 @@ func (h *PlaylistHandler) StartPlaylistSync(w http.ResponseWriter, r *http.Reque
 		return
 	}
 
-	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+	resp := map[string]interface{}{
 		"success":     true,
 		"job_id":      jobID,
 		"playlist_id": listID,
 		"message":     "Playlist synchronization started in background",
 		"status":      h.syncer.GetSyncStatus(),
-	})
+	}
+	if syncType != "" {
+		resp["sync_type"] = syncType
+	}
+	writeJSON(w, http.StatusAccepted, resp)
 }
 
 func (h *PlaylistHandler) StartAllPlaylistsSync(w http.ResponseWriter, r *http.Request) {
@@ -302,14 +329,35 @@ func (h *PlaylistHandler) StartAllPlaylistsSync(w http.ResponseWriter, r *http.R
 	if fStr := r.URL.Query().Get("force"); fStr != "" {
 		force = fStr == "true" || fStr == "1"
 	}
+	syncType := strings.TrimSpace(r.URL.Query().Get("type"))
+	if syncType == "" {
+		syncType = strings.TrimSpace(r.URL.Query().Get("sync_type"))
+	}
 	var req SyncRequest
 	if r.Body != nil && r.ContentLength > 0 {
-		if err := json.NewDecoder(r.Body).Decode(&req); err == nil && req.Force != nil {
-			force = *req.Force
+		if err := json.NewDecoder(r.Body).Decode(&req); err == nil {
+			if req.Force != nil {
+				force = *req.Force
+			}
+			if req.Type != nil && strings.TrimSpace(*req.Type) != "" {
+				syncType = strings.TrimSpace(*req.Type)
+			} else if req.SyncType != nil && strings.TrimSpace(*req.SyncType) != "" {
+				syncType = strings.TrimSpace(*req.SyncType)
+			}
 		}
 	}
 
-	jobID, err := h.syncer.StartAsyncSync(0, force)
+	if syncType != "" {
+		if _, err := models.ParseSyncTypes(syncType); err != nil {
+			writeJSON(w, http.StatusBadRequest, map[string]string{
+				"error":   "invalid_sync_type",
+				"message": err.Error(),
+			})
+			return
+		}
+	}
+
+	jobID, err := h.syncer.StartAsyncSync(0, force, syncType)
 	if err != nil {
 		writeJSON(w, http.StatusConflict, map[string]interface{}{
 			"error":   "sync_in_progress",
@@ -319,12 +367,16 @@ func (h *PlaylistHandler) StartAllPlaylistsSync(w http.ResponseWriter, r *http.R
 		return
 	}
 
-	writeJSON(w, http.StatusAccepted, map[string]interface{}{
+	resp := map[string]interface{}{
 		"success": true,
 		"job_id":  jobID,
 		"message": "All playlists synchronization started in background",
 		"status":  h.syncer.GetSyncStatus(),
-	})
+	}
+	if syncType != "" {
+		resp["sync_type"] = syncType
+	}
+	writeJSON(w, http.StatusAccepted, resp)
 }
 
 func (h *PlaylistHandler) GetSyncStatus(w http.ResponseWriter, r *http.Request) {

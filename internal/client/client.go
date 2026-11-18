@@ -738,7 +738,7 @@ func (c *APIClient) GetAllSeriesEpisodes(ctx context.Context, playlistID uint64,
 	return allEpisodes, nil
 }
 
-// FilterNonDummyEpgIDs removes dummy.epg and dummy-<id> from the requested IDs.
+// FilterNonDummyEpgIDs removes dummy.epg, dummy-<id>, and event-<id> from the requested IDs.
 func FilterNonDummyEpgIDs(epgIDs []string) []string {
 	if len(epgIDs) == 0 {
 		return nil
@@ -746,7 +746,7 @@ func FilterNonDummyEpgIDs(epgIDs []string) []string {
 	clean := make([]string, 0, len(epgIDs))
 	for _, id := range epgIDs {
 		trimmed := strings.TrimSpace(id)
-		if trimmed != "" && !strings.EqualFold(trimmed, "dummy.epg") && !util.IsDummyStreamID(trimmed) {
+		if trimmed != "" && !strings.EqualFold(trimmed, "dummy.epg") && !util.IsDummyStreamID(trimmed) && !util.IsEventStreamID(trimmed) {
 			clean = append(clean, trimmed)
 		}
 	}

@@ -16,6 +16,7 @@ import {
 } from 'lucide-react';
 import { userApi, playlistApi } from '../api/client';
 import MultiCategorySelect from '../components/MultiCategorySelect';
+import SearchableUserSelect from '../components/SearchableUserSelect';
 import ProviderEditor from '../components/ProviderEditor';
 import CalendarPicker from '../components/CalendarPicker';
 import { PageHeader } from '../components/ui';
@@ -486,22 +487,22 @@ export default function CreateUserWizard({ currentPlaylist, playlists = [], onUs
 
               {/* Template user loader */}
               {existingUsers.length > 0 && (
-                <div className="p-3 bg-[#f8f9fe] dark:bg-slate-800/60 border border-[#dee2e6] dark:border-slate-700 rounded-lg">
-                  <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider mb-1">
+                <div className="p-3 bg-[#f8f9fe] dark:bg-slate-800/60 border border-[#dee2e6] dark:border-slate-700 rounded-lg relative z-30 space-y-1.5">
+                  <label className="block text-xs font-bold text-[#525f7f] dark:text-slate-300 uppercase tracking-wider">
                     Load categories from an existing user (Template)
                   </label>
-                  <select
+                  <SearchableUserSelect
+                    users={existingUsers}
                     value={templateUserId}
-                    onChange={(e) => handleSelectTemplateUser(e.target.value)}
-                    className="w-full px-3 py-2 bg-white dark:bg-slate-800 border border-[#dee2e6] dark:border-slate-700 rounded text-xs text-[#32325d] dark:text-slate-100 focus:outline-none focus:border-[#3970e1] shadow-sm"
-                  >
-                    <option value="">-- Select a template user --</option>
-                    {existingUsers.map((u) => (
-                      <option key={u.id} value={u.id}>
-                        {u.name} ({u.username})
-                      </option>
-                    ))}
-                  </select>
+                    onChange={(uId) => handleSelectTemplateUser(uId)}
+                    placeholder="-- Select a template user --"
+                  />
+                  {templateUserId && (
+                    <p className="text-[11px] text-[#2dce89] dark:text-emerald-400 font-medium flex items-center gap-1 pt-0.5">
+                      <Check className="w-3.5 h-3.5" />
+                      Categories loaded from template user. You can further adjust them below.
+                    </p>
+                  )}
                 </div>
               )}
 

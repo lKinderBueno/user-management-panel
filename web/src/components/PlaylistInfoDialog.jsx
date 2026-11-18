@@ -255,18 +255,19 @@ export default function PlaylistInfoDialog({
   };
 
   // --- Domain and Origin Resolution ---
-  const rawCname = (playlist?.cname || '').trim();
+  const candidatePlaylistCname = (playlist?.cname && playlist.cname !== 'undefined' && playlist.cname !== 'null') ? playlist.cname : '';
+  const rawCname = (candidatePlaylistCname || '').trim();
   const primaryDomain = rawCname.split(/[\s,;]+/)[0] || '';
   const cnameClean = primaryDomain.replace(/^https?:\/\//, '').replace(/\/+$/, '');
-  const hasCname = cnameClean.length > 0;
+  const hasCname = cnameClean.length > 0 && cnameClean !== 'undefined' && cnameClean !== 'null';
   const isCnameSSL = Boolean(playlist?.cname_ssl || rawCname.startsWith('https://'));
 
   const protocolHost = useMemo(() => {
     return resolveProtocolHost({
-      cname: playlist?.cname,
+      cname: candidatePlaylistCname,
       cnameSSL: playlist?.cname_ssl,
     });
-  }, [playlist?.cname, playlist?.cname_ssl]);
+  }, [candidatePlaylistCname, playlist?.cname_ssl]);
 
   // Query parameters for customized M3U / EPG
   const m3uQueryParams = [];
@@ -295,7 +296,8 @@ export default function PlaylistInfoDialog({
   const dreamboxUrl = `${protocolHost}/get.php?username=${encodeURIComponent(localUsername)}&password=${encodeURIComponent(localPassword)}&type=dreambox&output=ts`;
 
   // STB / Web Streaming Player URL resolution (stb.<hostname> or error if IP / locked)
-  const effectiveCname = playlist?.cname || user?.cname || '';
+  const candidateUserCname = (user?.cname && user.cname !== 'undefined' && user.cname !== 'null') ? user.cname : '';
+  const effectiveCname = candidatePlaylistCname || candidateUserCname || '';
   const effectiveCnameSSL = Boolean(playlist?.cname_ssl || user?.cname_ssl || isCnameSSL);
 
   const webPlayerResolution = useMemo(() => {

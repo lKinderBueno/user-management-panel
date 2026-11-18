@@ -10,8 +10,11 @@ export default function CustomizeM3uModal({ user, playlist = null, onClose }) {
   const [excludeSeries, setExcludeSeries] = React.useState(false);
   const [copied, setCopied] = React.useState(false);
 
+  const candidateCname = (playlist?.cname && playlist.cname !== 'undefined' && playlist.cname !== 'null')
+    ? playlist.cname
+    : ((user?.cname && user.cname !== 'undefined' && user.cname !== 'null') ? user.cname : '');
   const origin = resolveProtocolHost({
-    cname: playlist?.cname || user?.cname,
+    cname: candidateCname,
     cnameSSL: playlist?.cname_ssl || user?.cname_ssl,
   });
   const token = (user?.m3u || '').replace(/^\//, '');

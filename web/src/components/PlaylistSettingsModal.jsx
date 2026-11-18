@@ -31,11 +31,11 @@ export default function PlaylistSettingsModal({
 
   useEffect(() => {
     if (playlist) {
-      const rawCname = playlist.cname || '';
+      const rawCname = (playlist.cname && playlist.cname !== 'undefined' && playlist.cname !== 'null') ? playlist.cname : '';
       const cleanCname = rawCname
         .split(/[\s,;]+/)
         .map((s) => s.replace(/^https?:\/\//i, '').replace(/\/+$/, '').trim())
-        .filter(Boolean)
+        .filter((s) => s && s.toLowerCase() !== 'undefined' && s.toLowerCase() !== 'null')
         .join(', ');
 
       setSettingsForm({
@@ -61,7 +61,7 @@ export default function PlaylistSettingsModal({
       const cleanCname = (settingsForm.cname || '')
         .split(/[\s,;]+/)
         .map((s) => s.replace(/^https?:\/\//i, '').replace(/\/+$/, '').trim())
-        .filter(Boolean)
+        .filter((s) => s && s.toLowerCase() !== 'undefined' && s.toLowerCase() !== 'null')
         .join(', ');
 
       const updated = await playlistApi.updatePlaylistSettings(playlist.id, {

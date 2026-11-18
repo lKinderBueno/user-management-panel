@@ -171,6 +171,7 @@ type Playlist struct {
 	EnforceCname           bool            `json:"enforce_cname"`
 	CnameSSL               bool            `json:"cname_ssl"`
 	WelcomeInfo            json.RawMessage `json:"welcome_info,omitempty"`
+	AedConfig              json.RawMessage `json:"aed_config,omitempty"`
 	PortalBranding         json.RawMessage `json:"portal_branding,omitempty"`
 }
 

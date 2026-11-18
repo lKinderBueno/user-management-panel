@@ -70,14 +70,14 @@ func (r *PlaylistRepo) UpsertPlaylist(ctx context.Context, p client.Playlist) er
 		INSERT INTO playlists (
 			id, name, position, message, language, use_provider_movie_info,
 			epg_days, tvg_id, gzip, epg_dummy, max_connections, limit_max_connections,
-			allow_tracking, time_shift, patterns, welcome_info, cname, expiry,
+			allow_tracking, time_shift, patterns, welcome_info, aed_config, cname, expiry,
 			logo, color, last_updated_channel, last_updated_movie, last_updated_series,
 			active_channels, active_movies, active_series,
 			synced_at
 		) VALUES (
 			?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?, ?,
-			?, ?, ?, ?, ?, ?,
+			?, ?, ?, ?, ?, ?, ?,
 			?, ?, ?, ?, ?,
 			?, ?, ?,
 			?
@@ -94,6 +94,8 @@ func (r *PlaylistRepo) UpsertPlaylist(ctx context.Context, p client.Playlist) er
 			epg_dummy = VALUES(epg_dummy),
 			time_shift = VALUES(time_shift),
 			patterns = VALUES(patterns),
+			welcome_info = VALUES(welcome_info),
+			aed_config = VALUES(aed_config),
 			expiry = VALUES(expiry),
 			logo = VALUES(logo),
 			color = VALUES(color),
@@ -117,6 +119,12 @@ func (r *PlaylistRepo) UpsertPlaylist(ctx context.Context, p client.Playlist) er
 		welcomeStr = &s
 	}
 
+	var aedConfigStr *string
+	if len(p.AedConfig) > 0 && string(p.AedConfig) != "null" {
+		s := string(p.AedConfig)
+		aedConfigStr = &s
+	}
+
 	var cleanCname *string
 	if p.Cname != nil {
 		hosts := util.NormalizeCnameList(*p.Cname)
@@ -131,7 +139,7 @@ func (r *PlaylistRepo) UpsertPlaylist(ctx context.Context, p client.Playlist) er
 	_, err := r.db.ExecContext(ctx, query,
 		p.ID.Uint64(), p.Name, p.Position.Int(), p.Message, p.Language, p.UseProviderMovieInfo.Bool(),
 		p.EpgDays.Int(), p.TvgID.Bool(), p.Gzip.Bool(), p.EpgDummy, p.MaxConnections.Int(), p.LimitMaxConnections.Bool(),
-		p.AllowTracking.Bool(), p.TimeShift.Float64(), patternsStr, welcomeStr, cleanCname, p.Expiry.ToTimePtr(),
+		p.AllowTracking.Bool(), p.TimeShift.Float64(), patternsStr, welcomeStr, aedConfigStr, cleanCname, p.Expiry.ToTimePtr(),
 		p.Logo, p.Color, nil, nil, nil,
 		p.ActiveChannels.Int(), p.GetActiveMovies(), p.ActiveSeries.Int(),
 		now,
@@ -168,6 +176,7 @@ func (r *PlaylistRepo) EnsureSchema(ctx context.Context) error {
 		`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS orphaned_at DATETIME(3) NULL`,
 		`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS tracking_timeout_minutes INT NOT NULL DEFAULT 10`,
 		`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS portal_branding MEDIUMTEXT NULL`,
+		`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS aed_config LONGTEXT NULL`,
 		`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS enforce_cname TINYINT(1) NOT NULL DEFAULT 0`,
 		`ALTER TABLE playlists ADD COLUMN IF NOT EXISTS cname_ssl TINYINT(1) NOT NULL DEFAULT 0`,
 		`ALTER TABLE playlists MODIFY COLUMN cname TEXT NULL`,

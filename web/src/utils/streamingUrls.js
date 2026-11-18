@@ -16,6 +16,10 @@ export function isIPAddress(host) {
     .trim()
     .toLowerCase();
 
+  if (!clean || clean === 'undefined' || clean === 'null') {
+    return false;
+  }
+
   if (clean === 'localhost' || clean === '127.0.0.1' || clean === '::1') {
     return true;
   }
@@ -40,6 +44,9 @@ export function isIPAddress(host) {
 export function splitHostAndPort(raw) {
   if (!raw) return ['', ''];
   const clean = raw.trim().replace(/^https?:\/\//i, '').replace(/\/+$/, '');
+  if (!clean || clean.toLowerCase() === 'undefined' || clean.toLowerCase() === 'null') {
+    return ['', ''];
+  }
 
   // Check IPv6 bracket notation e.g. [::1]:8000 or [::1]
   const ipv6Match = clean.match(/^(\[[0-9a-fA-F:]+\])(?::(\d+))?$/);
@@ -76,11 +83,15 @@ export function getSitePort() {
  */
 export function cleanBaseHost(host) {
   if (!host) return '';
-  return host
+  const clean = host
     .replace(/^https?:\/\//i, '')
     .replace(/\/+$/, '')
     .trim()
     .replace(/^(?:stb|player|web)\./i, '');
+  if (!clean || clean.toLowerCase() === 'undefined' || clean.toLowerCase() === 'null') {
+    return '';
+  }
+  return clean;
 }
 
 /**
@@ -134,29 +145,37 @@ export function resolveProtocolHost({
   const rawCname = (cname || '').trim();
   const primaryEntry = rawCname.split(/[\s,;]+/)[0] || '';
   const cleanEntry = primaryEntry.replace(/^https?:\/\//i, '').replace(/\/+$/, '').trim();
-  const hasCname = cleanEntry.length > 0;
+  const hasCname = Boolean(
+    cleanEntry &&
+    cleanEntry.toLowerCase() !== 'undefined' &&
+    cleanEntry.toLowerCase() !== 'null' &&
+    cleanEntry.toLowerCase() !== '{cname}'
+  );
   const isCnameSSL = Boolean(cnameSSL || rawCname.startsWith('https://'));
 
   if (hasCname) {
     const [host, explicitPort] = splitHostAndPort(cleanEntry);
-    const sitePort = currentPort !== undefined && currentPort !== '' ? currentPort : getSitePort();
+    const baseHost = cleanBaseHost(host);
+    if (baseHost) {
+      const sitePort = currentPort !== undefined && currentPort !== '' ? currentPort : getSitePort();
 
-    let portToUse = '';
-    if (explicitPort) {
-      portToUse = explicitPort;
-    } else if (isCnameSSL) {
-      if (currentProtocol === 'https:' && sitePort && sitePort !== '443' && sitePort !== '80') {
-        portToUse = sitePort;
+      let portToUse = '';
+      if (explicitPort) {
+        portToUse = explicitPort;
+      } else if (isCnameSSL) {
+        if (currentProtocol === 'https:' && sitePort && sitePort !== '443' && sitePort !== '80') {
+          portToUse = sitePort;
+        }
+      } else {
+        if (sitePort && sitePort !== '80' && sitePort !== '443') {
+          portToUse = sitePort;
+        }
       }
-    } else {
-      if (sitePort && sitePort !== '80' && sitePort !== '443') {
-        portToUse = sitePort;
-      }
+
+      const scheme = isCnameSSL ? 'https' : 'http';
+      const hostWithPort = portToUse ? `${baseHost}:${portToUse}` : baseHost;
+      return `${scheme}://${hostWithPort}`;
     }
-
-    const scheme = isCnameSSL ? 'https' : 'http';
-    const hostWithPort = portToUse ? `${host}:${portToUse}` : host;
-    return `${scheme}://${hostWithPort}`;
   }
 
   return getServerOrigin();
@@ -193,7 +212,12 @@ export function resolveStreamingPlayerUrl({
   const rawCname = (cname || '').trim();
   const primaryEntry = rawCname.split(/[\s,;]+/)[0] || '';
   const cleanEntry = primaryEntry.replace(/^https?:\/\//i, '').replace(/\/+$/, '').trim();
-  const hasCname = cleanEntry.length > 0;
+  const hasCname = Boolean(
+    cleanEntry &&
+    cleanEntry.toLowerCase() !== 'undefined' &&
+    cleanEntry.toLowerCase() !== 'null' &&
+    cleanEntry.toLowerCase() !== '{cname}'
+  );
   const isCnameSSL = Boolean(cnameSSL || rawCname.startsWith('https://'));
 
   const authPath = (includeAuth && (username || password))
@@ -206,30 +230,47 @@ export function resolveStreamingPlayerUrl({
     const [host, explicitPort] = splitHostAndPort(cleanEntry);
     const baseHost = cleanBaseHost(host);
 
-    let portToUse = '';
-    if (explicitPort) {
-      portToUse = explicitPort;
-    } else if (isCnameSSL) {
-      if (currentProtocol === 'https:' && sitePort && sitePort !== '443' && sitePort !== '80') {
-        portToUse = sitePort;
+    if (baseHost) {
+      let portToUse = '';
+      if (explicitPort) {
+        portToUse = explicitPort;
+      } else if (isCnameSSL) {
+        if (currentProtocol === 'https:' && sitePort && sitePort !== '443' && sitePort !== '80') {
+          portToUse = sitePort;
+        }
+      } else {
+        if (sitePort && sitePort !== '80' && sitePort !== '443') {
+          portToUse = sitePort;
+        }
       }
-    } else {
-      if (sitePort && sitePort !== '80' && sitePort !== '443') {
-        portToUse = sitePort;
-      }
-    }
 
-    const hostWithPort = portToUse ? `${baseHost}:${portToUse}` : baseHost;
-    return {
-      url: `http://${subdomain}.${hostWithPort}${authPath}`,
-      isError: false,
-      errorMessage: null,
-      baseHost,
-    };
+      const hostWithPort = portToUse ? `${baseHost}:${portToUse}` : baseHost;
+      return {
+        url: `http://${subdomain}.${hostWithPort}${authPath}`,
+        isError: false,
+        errorMessage: null,
+        baseHost,
+      };
+    }
   }
 
-  // CNAME is not configured: check current dashboard host
-  const hostIsIP = isIPAddress(currentHostname);
+  // CNAME is not configured or resolved empty: fall back to dashboard / server host
+  let effectiveHost = (currentHostname || '').trim();
+  if (!effectiveHost || effectiveHost.toLowerCase() === 'undefined' || effectiveHost.toLowerCase() === 'null') {
+    try {
+      const serverOrigin = getServerOrigin();
+      if (serverOrigin) {
+        const parsed = new URL(serverOrigin);
+        effectiveHost = parsed.hostname;
+      }
+    } catch {
+      if (typeof window !== 'undefined' && window.location.hostname) {
+        effectiveHost = window.location.hostname;
+      }
+    }
+  }
+
+  const hostIsIP = isIPAddress(effectiveHost);
   const lockedToDashboard = isDashboardLocked(settings);
 
   if (hostIsIP) {
@@ -252,9 +293,19 @@ export function resolveStreamingPlayerUrl({
     };
   }
 
-  // Dashboard has a regular domain that is not locked to dashboard only
-  const [host, explicitPort] = splitHostAndPort(currentHostname);
+  const [host, explicitPort] = splitHostAndPort(effectiveHost);
   const baseHost = cleanBaseHost(host);
+
+  if (!baseHost) {
+    const msg = 'Error: CNAME not set (unable to determine portal domain)';
+    return {
+      url: msg,
+      isError: true,
+      errorMessage: msg,
+      baseHost: '',
+    };
+  }
+
   const portToUse = explicitPort || (sitePort && sitePort !== '80' && sitePort !== '443' ? sitePort : '');
   const hostWithPort = portToUse ? `${baseHost}:${portToUse}` : baseHost;
 
@@ -283,5 +334,3 @@ export function resolveWebPlayerUrl(options = {}) {
 export function resolveStbUrl(options = {}) {
   return resolveStreamingPlayerUrl({ ...options, subdomain: 'stb' });
 }
-
-

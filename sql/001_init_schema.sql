@@ -23,6 +23,7 @@ CREATE TABLE IF NOT EXISTS `playlists` (
     `time_shift` DECIMAL(5, 2) NOT NULL DEFAULT 0.00,
     `patterns` LONGTEXT NULL,
     `welcome_info` LONGTEXT NULL,
+    `aed_config` LONGTEXT NULL,
     `cname` TEXT NULL,
     `enforce_cname` TINYINT(1) NOT NULL DEFAULT 0,
     `cname_ssl` TINYINT(1) NOT NULL DEFAULT 0,
